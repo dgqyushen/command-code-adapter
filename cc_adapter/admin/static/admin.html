@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CC Adapter Admin</title>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<div id="app">
+  <div id="login-overlay" class="hidden">
+    <div class="login-box">
+      <h2 id="login-title">Admin Login</h2>
+      <input type="password" id="login-password" placeholder="Password">
+      <button id="login-btn">Login</button>
+      <p id="login-error" class="error-text hidden"></p>
+    </div>
+  </div>
+  <nav id="topbar">
+    <span class="logo">CC Adapter</span>
+    <div class="topbar-actions">
+      <select id="lang-switch">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+      </select>
+      <button id="theme-toggle">Dark</button>
+    </div>
+  </nav>
+  <div id="layout">
+    <aside id="sidebar">
+      <div class="nav-item active" data-tab="dashboard">Dashboard</div>
+      <div class="nav-item" data-tab="config">Configuration</div>
+      <div class="nav-item" data-tab="playground">Playground</div>
+    </aside>
+    <main id="content">
+      <div id="toast" class="hidden"></div>
+      <div id="tab-dashboard" class="tab-content active"></div>
+      <div id="tab-config" class="tab-content"></div>
+      <div id="tab-playground" class="tab-content"></div>
+    </main>
+  </div>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>
