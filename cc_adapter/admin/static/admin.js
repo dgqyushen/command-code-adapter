@@ -1,0 +1,429 @@
+// I18n
+const i18n = {
+  zh: {
+    title: "CC Adapter 管理面板",
+    loginTitle: "管理员登录",
+    loginBtn: "登录",
+    loginError: "密码错误",
+    loginPlaceholder: "请输入密码",
+    dashboard: "状态面板",
+    config: "配置编辑",
+    playground: "测试面板",
+    serverStatus: "服务状态",
+    running: "运行中",
+    stopped: "未运行",
+    apiKey: "API Key",
+    configured: "已配置",
+    notConfigured: "未配置",
+    verify: "验证",
+    verifying: "验证中...",
+    valid: "有效",
+    invalid: "无效",
+    save: "保存",
+    cancel: "取消",
+    saved: "保存成功",
+    saveFailed: "保存失败",
+    model: "模型",
+    messages: "消息",
+    stream: "流式输出",
+    send: "发送",
+    clear: "清空",
+    response: "响应",
+    configKey: "API Key",
+    configBaseUrl: "Base URL",
+    configHost: "监听地址",
+    configPort: "监听端口",
+    configLogLevel: "日志级别",
+    themeDark: "Dark",
+    themeLight: "Light",
+  },
+  en: {
+    title: "CC Adapter Admin",
+    loginTitle: "Admin Login",
+    loginBtn: "Login",
+    loginError: "Invalid password",
+    loginPlaceholder: "Enter password",
+    dashboard: "Dashboard",
+    config: "Configuration",
+    playground: "Playground",
+    serverStatus: "Server Status",
+    running: "Running",
+    stopped: "Stopped",
+    apiKey: "API Key",
+    configured: "Configured",
+    notConfigured: "Not Configured",
+    verify: "Verify",
+    verifying: "Verifying...",
+    valid: "Valid",
+    invalid: "Invalid",
+    save: "Save",
+    cancel: "Cancel",
+    saved: "Saved successfully",
+    saveFailed: "Save failed",
+    model: "Model",
+    messages: "Messages",
+    stream: "Stream",
+    send: "Send",
+    clear: "Clear",
+    response: "Response",
+    configKey: "API Key",
+    configBaseUrl: "Base URL",
+    configHost: "Host",
+    configPort: "Port",
+    configLogLevel: "Log Level",
+    themeDark: "Dark",
+    themeLight: "Light",
+  },
+};
+
+let lang = localStorage.getItem("cc-admin-lang") || "zh";
+let theme = localStorage.getItem("cc-admin-theme") || "light";
+let token = localStorage.getItem("cc-admin-token") || null;
+
+function t(key) { return i18n[lang][key] || key; }
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.title = t("title");
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+  document.getElementById("theme-toggle").textContent =
+    theme === "dark" ? t("themeLight") : t("themeDark");
+}
+
+function toggleTheme() {
+  theme = theme === "dark" ? "light" : "dark";
+  localStorage.setItem("cc-admin-theme", theme);
+  applyTheme();
+}
+
+function switchLang(newLang) {
+  lang = newLang;
+  localStorage.setItem("cc-admin-lang", lang);
+  applyLang();
+  renderAll();
+}
+
+// Toast
+let toastTimer = null;
+function showToast(msg, type) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 3000);
+}
+
+// API helpers
+async function api(method, path, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const resp = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (resp.status === 401 && path !== "/admin/api/login") {
+    showLogin();
+    throw new Error("Unauthorized");
+  }
+  return resp;
+}
+
+// Auth
+function showLogin() {
+  token = null;
+  localStorage.removeItem("cc-admin-token");
+  document.getElementById("login-overlay").classList.remove("hidden");
+  document.getElementById("login-error").classList.add("hidden");
+}
+
+async function doLogin() {
+  const pw = document.getElementById("login-password").value;
+  const resp = await api("POST", "/admin/api/login", { password: pw });
+  if (resp.status === 401) {
+    document.getElementById("login-error").classList.remove("hidden");
+    return;
+  }
+  const data = await resp.json();
+  token = data.token;
+  localStorage.setItem("cc-admin-token", token);
+  document.getElementById("login-overlay").classList.add("hidden");
+  renderAll();
+}
+
+// Navigation
+function switchTab(name) {
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+  document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add("active");
+  document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  renderTab(name);
+}
+
+// Render by tab
+function renderAll() {
+  applyLang();
+  applyTheme();
+  const active = document.querySelector(".nav-item.active");
+  if (active) renderTab(active.dataset.tab);
+}
+
+function renderTab(name) {
+  if (name === "dashboard") renderDashboard();
+  else if (name === "config") renderConfig();
+  else if (name === "playground") renderPlayground();
+}
+
+// Dashboard
+async function renderDashboard() {
+  const el = document.getElementById("tab-dashboard");
+  el.innerHTML = `
+    <h2 data-i18n="dashboard">${t("dashboard")}</h2>
+    <div class="card-grid" style="margin-top:16px">
+      <div class="card">
+        <div class="status-dot" id="health-dot"></div>
+        <strong data-i18n="serverStatus">${t("serverStatus")}</strong>
+        <p id="health-text" style="margin-top:8px;font-size:13px;color:var(--text-secondary)">Loading...</p>
+      </div>
+      <div class="card">
+        <div class="status-dot" id="key-dot"></div>
+        <strong data-i18n="apiKey">${t("apiKey")}</strong>
+        <p id="key-text" style="margin-top:8px;font-size:13px;color:var(--text-secondary)">Loading...</p>
+        <button class="btn btn-secondary" id="verify-key-btn" style="margin-top:12px">${t("verify")}</button>
+      </div>
+    </div>`;
+  loadDashboard();
+  document.getElementById("verify-key-btn").onclick = verifyKey;
+}
+
+async function loadDashboard() {
+  try {
+    const resp = await api("GET", "/admin/api/health");
+    const data = await resp.json();
+    document.getElementById("health-dot").className = "status-dot ok";
+    document.getElementById("health-text").textContent =
+      `${t("running")} | uptime ${Math.floor(data.uptime / 60)}m`;
+    document.getElementById("key-dot").className =
+      data.cc_api_key_configured ? "status-dot ok" : "status-dot err";
+    document.getElementById("key-text").textContent =
+      data.cc_api_key_configured ? t("configured") : t("notConfigured");
+  } catch {
+    document.getElementById("health-dot").className = "status-dot err";
+    document.getElementById("health-text").textContent = t("stopped");
+  }
+}
+
+async function verifyKey() {
+  const btn = document.getElementById("verify-key-btn");
+  btn.textContent = t("verifying");
+  btn.disabled = true;
+  try {
+    const resp = await api("POST", "/admin/api/verify-key");
+    const data = await resp.json();
+    showToast(data.valid ? `${t("apiKey")}: ${t("valid")}` : `${t("apiKey")}: ${t("invalid")} - ${data.message}`,
+      data.valid ? "success" : "error");
+    loadDashboard();
+  } catch { showToast(t("saveFailed"), "error"); }
+  btn.textContent = t("verify");
+  btn.disabled = false;
+}
+
+// Config
+let configData = null;
+
+async function renderConfig() {
+  const el = document.getElementById("tab-config");
+  el.innerHTML = `
+    <h2 data-i18n="config">${t("config")}</h2>
+    <div class="card" style="margin-top:16px">
+      <div class="form-group">
+        <label>CC_API_KEY</label>
+        <input type="password" id="cfg-key" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label>CC_BASE_URL</label>
+        <input type="text" id="cfg-base-url">
+      </div>
+      <div class="form-group">
+        <label>CC_ADAPTER_HOST</label>
+        <input type="text" id="cfg-host">
+      </div>
+      <div class="form-group">
+        <label>CC_ADAPTER_PORT</label>
+        <input type="number" id="cfg-port">
+      </div>
+      <div class="form-group">
+        <label>CC_ADAPTER_LOG_LEVEL</label>
+        <select id="cfg-log-level">
+          <option value="DEBUG">DEBUG</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="cfg-save">${t("save")}</button>
+        <button class="btn btn-secondary" id="cfg-cancel">${t("cancel")}</button>
+      </div>
+    </div>`;
+  loadConfig();
+  document.getElementById("cfg-save").onclick = saveConfig;
+  document.getElementById("cfg-cancel").onclick = loadConfig;
+}
+
+async function loadConfig() {
+  try {
+    const resp = await api("GET", "/admin/api/config");
+    configData = await resp.json();
+    document.getElementById("cfg-key").value = configData.cc_api_key === "****" ? "" : configData.cc_api_key;
+    document.getElementById("cfg-base-url").value = configData.cc_base_url;
+    document.getElementById("cfg-host").value = configData.host;
+    document.getElementById("cfg-port").value = configData.port;
+    document.getElementById("cfg-log-level").value = configData.log_level;
+  } catch { showToast(t("saveFailed"), "error"); }
+}
+
+async function saveConfig() {
+  const body = {};
+  const key = document.getElementById("cfg-key").value;
+  if (key) body.cc_api_key = key;
+  const baseUrl = document.getElementById("cfg-base-url").value;
+  if (baseUrl !== configData.cc_base_url) body.cc_base_url = baseUrl;
+  const host = document.getElementById("cfg-host").value;
+  if (host !== configData.host) body.host = host;
+  const port = parseInt(document.getElementById("cfg-port").value);
+  if (port !== configData.port) body.port = port;
+  const logLevel = document.getElementById("cfg-log-level").value;
+  if (logLevel !== configData.log_level) body.log_level = logLevel;
+  if (Object.keys(body).length === 0) { showToast("No changes", "success"); return; }
+  try {
+    const resp = await api("PUT", "/admin/api/config", body);
+    if (!resp.ok) throw new Error(await resp.text());
+    configData = await resp.json();
+    showToast(t("saved"), "success");
+  } catch { showToast(t("saveFailed"), "error"); }
+}
+
+// Playground
+async function renderPlayground() {
+  const el = document.getElementById("tab-playground");
+  el.innerHTML = `
+    <h2 data-i18n="playground">${t("playground")}</h2>
+    <div class="card playground-form" style="margin-top:16px">
+      <div class="form-group">
+        <label data-i18n="model">${t("model")}</label>
+        <input type="text" id="pg-model" value="claude-sonnet-4-6" placeholder="claude-sonnet-4-6">
+      </div>
+      <div class="form-group">
+        <label data-i18n="messages">${t("messages")}</label>
+        <textarea id="pg-messages" placeholder='[{"role":"user","content":"Hello"}]'></textarea>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="pg-stream" checked>
+        <label for="pg-stream" data-i18n="stream">${t("stream")}</label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="pg-send">${t("send")}</button>
+        <button class="btn btn-secondary" id="pg-clear">${t("clear")}</button>
+      </div>
+    </div>
+    <div class="response-area" id="pg-response"></div>`;
+  document.getElementById("pg-send").onclick = sendPlayground;
+  document.getElementById("pg-clear").onclick = () => {
+    document.getElementById("pg-response").textContent = "";
+  };
+}
+
+async function sendPlayground() {
+  const model = document.getElementById("pg-model").value || "claude-sonnet-4-6";
+  const messagesText = document.getElementById("pg-messages").value;
+  const stream = document.getElementById("pg-stream").checked;
+  let messages;
+  try { messages = JSON.parse(messagesText); }
+  catch { showToast("Invalid JSON in messages", "error"); return; }
+
+  const respArea = document.getElementById("pg-response");
+  respArea.textContent = "Sending...";
+
+  if (stream) {
+    const response = await fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages, stream: true }),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      respArea.textContent = JSON.stringify(err, null, 2);
+      return;
+    }
+    respArea.textContent = "";
+    respArea.classList.add("streaming");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (line.startsWith("data: ") && line !== "data: [DONE]") {
+          try {
+            const json = JSON.parse(line.slice(6));
+            const content = json.choices?.[0]?.delta?.content || "";
+            if (content) {
+              const div = document.createElement("div");
+              div.className = "line";
+              div.textContent = content;
+              respArea.appendChild(div);
+              respArea.scrollTop = respArea.scrollHeight;
+            }
+          } catch {}
+        }
+      }
+    }
+    respArea.classList.remove("streaming");
+  } else {
+    try {
+      const resp = await api("POST", "/v1/chat/completions", { model, messages, stream: false });
+      const data = await resp.json();
+      respArea.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      respArea.textContent = `Error: ${e.message}`;
+    }
+  }
+}
+
+// Init
+document.addEventListener("DOMContentLoaded", () => {
+  // Theme
+  applyTheme();
+  document.getElementById("theme-toggle").onclick = toggleTheme;
+
+  // Lang
+  document.getElementById("lang-switch").value = lang;
+  document.getElementById("lang-switch").onchange = (e) => switchLang(e.target.value);
+
+  // Login
+  document.getElementById("login-btn").onclick = doLogin;
+  document.getElementById("login-password").onkeydown = (e) => {
+    if (e.key === "Enter") doLogin();
+  };
+
+  // Nav
+  document.querySelectorAll(".nav-item").forEach(el => {
+    el.onclick = () => switchTab(el.dataset.tab);
+  });
+
+  // Check auth on load
+  (async () => {
+    const resp = await fetch("/admin/api/health", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (resp.status === 401) showLogin();
+    else { renderAll(); }
+  })();
+});
