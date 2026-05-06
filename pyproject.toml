@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "cc-adapter"
+version = "0.1.0"
+description = "OpenAI Chat Completions adapter for Command Code API"
+authors = ["Command Code Adapter"]
+packages = [{ include = "cc_adapter" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11"
+fastapi = "^0.115.0"
+httpx = "^0.28.0"
+pydantic = "^2.0"
+pydantic-settings = "^2.0"
+uvicorn = { version = "^0.34.0", extras = ["standard"] }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+pytest-asyncio = "^0.25.0"
+httpx = "^0.28.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
