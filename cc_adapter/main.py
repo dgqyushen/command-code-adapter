@@ -11,7 +11,7 @@ from cc_adapter.config import AppConfig
 from cc_adapter.client import CommandCodeClient
 from cc_adapter.translator.request import RequestTranslator
 from cc_adapter.translator.response import translate_stream, collect_and_translate_nonstream
-from cc_adapter.errors import AdapterError
+from cc_adapter.errors import AdapterError, AuthenticationError
 from cc_adapter.models.openai import ChatCompletionRequest
 
 logger = logging.getLogger(__name__)
@@ -50,13 +50,10 @@ async def chat_completions(req: ChatCompletionRequest):
     cc_body, cc_headers = request_translator.translate(req)
     cc_body["params"]["stream"] = True  # always stream from CC internally
 
-    try:
-        cc_stream = cc_client.generate(cc_body, cc_headers)
-    except AdapterError:
-        raise
-    except Exception as e:
-        logger.exception("Unexpected error calling CC API")
-        raise AdapterError(message=str(e), status_code=502)
+    if not cc_client.api_key:
+        raise AuthenticationError("CC_API_KEY is not configured")
+
+    cc_stream = cc_client.generate(cc_body, cc_headers)
 
     if req.stream:
         return StreamingResponse(
