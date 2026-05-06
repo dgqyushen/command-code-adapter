@@ -1,3 +1,14 @@
+from .command_code import (
+    CCEvent,
+    CCFinish,
+    CCTextDelta,
+    CCToolCall,
+    CCToolResult,
+    CCModelUsage,
+    CCReasoningDelta,
+    CCReasoningEnd,
+    CCError,
+)
 from .openai import (
     ChatCompletionChunk,
     ChatCompletionRequest,
@@ -14,6 +25,15 @@ from .openai import (
 )
 
 __all__ = [
+    "CCEvent",
+    "CCFinish",
+    "CCTextDelta",
+    "CCToolCall",
+    "CCToolResult",
+    "CCModelUsage",
+    "CCReasoningDelta",
+    "CCReasoningEnd",
+    "CCError",
     "ChatCompletionChunk",
     "ChatCompletionRequest",
     "ChatCompletionResponse",
