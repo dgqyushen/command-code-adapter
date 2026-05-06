@@ -73,12 +73,25 @@ class RequestTranslator:
                 {
                     "name": t.function.name,
                     "description": t.function.description,
-                    "parameters": t.function.parameters or {},
+                    "input_schema": t.function.parameters or {},
                 }
                 for t in req.tools
             ]
+        import datetime
+
         return {
-            "config": {"env": "adapter"},
+            "config": {
+                "env": "adapter",
+                "workingDir": "/home/user/project",
+                "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "environment": "production",
+                "structure": ["src/", "tests/", "docs/"],
+                "isGitRepo": True,
+                "currentBranch": "main",
+                "mainBranch": "main",
+                "gitStatus": "clean",
+                "recentCommits": [],
+            },
             "memory": "",
             "taste": None,
             "skills": None,
