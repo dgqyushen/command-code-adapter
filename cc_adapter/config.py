@@ -10,3 +10,4 @@ class AppConfig(BaseSettings):
 
     cc_api_key: str = ""
     cc_base_url: str = "https://api.commandcode.ai"
+    admin_password: str = ""
