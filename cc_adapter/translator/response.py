@@ -32,11 +32,12 @@ def _map_finish_reason(cc_reason: str | None) -> str | None:
     return FINISH_REASON_MAP.get(cc_reason, "stop")
 
 
-def _make_tool_call(cc_event: dict, index: int = 0) -> ToolCall:
+def _make_tool_call(cc_event: dict, index: int = 0, include_index: bool = False) -> ToolCall:
     tool_name = cc_event.get("toolName", "")
     raw_args = cc_event.get("input", cc_event.get("args", {}))
     args = normalize_args(tool_name, raw_args)
     return ToolCall(
+        index=index if include_index else None,
         id=cc_event.get("toolCallId", f"call_{uuid.uuid4().hex[:8]}"),
         function=FunctionCall(
             name=cc_event.get("toolName", ""),
@@ -78,7 +79,7 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, st
 
             elif event_type == "tool-call":
                 logger.info("CC tool-call event: %s", event)
-                tool_call = _make_tool_call(event, tool_call_index)
+                tool_call = _make_tool_call(event, tool_call_index, include_index=True)
                 logger.info("Translated tool-call: id=%s name=%s args=%s", tool_call.id, tool_call.function.name, tool_call.function.arguments)
                 chunk = ChatCompletionChunk(
                     id=response_id,
@@ -93,7 +94,7 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, st
                 pass  # OpenAI doesn't return tool results in chat completions
 
             elif event_type == "finish":
-                finish_reason = _map_finish_reason(event.get("finishReason"))
+                finish_reason = "tool_calls" if tool_call_index else _map_finish_reason(event.get("finishReason"))
                 raw_usage = event.get("totalUsage")
                 if raw_usage:
                     usage = Usage(

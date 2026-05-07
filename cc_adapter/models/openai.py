@@ -22,6 +22,7 @@ class ToolDefinition(BaseModel):
 
 
 class ToolCall(BaseModel):
+    index: int | None = None
     id: str
     type: Literal["function"] = "function"
     function: FunctionCall

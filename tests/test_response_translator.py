@@ -48,6 +48,32 @@ async def test_stream_output():
 
 
 @pytest.mark.asyncio
+async def test_stream_tool_call_delta_includes_index():
+    async def fake_stream():
+        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/x"}}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    assert '"tool_calls":[{"index":0,"id":"call_1"' in chunks[0]
+
+
+@pytest.mark.asyncio
+async def test_stream_tool_call_finish_reason_overrides_end_turn():
+    async def fake_stream():
+        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/x"}}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    assert '"finish_reason":"tool_calls"' in chunks[1]
+
+
+@pytest.mark.asyncio
 async def test_stream_reasoning_content():
     async def fake_stream():
         yield {"type": "reasoning-delta", "text": "Let me think"}
