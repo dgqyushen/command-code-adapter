@@ -437,10 +437,18 @@ async function sendPlayground() {
           try {
             const json = JSON.parse(line.slice(6));
             const content = json.choices?.[0]?.delta?.content || "";
+            const reasoning = json.choices?.[0]?.delta?.reasoning_content || "";
             if (content) {
               const div = document.createElement("div");
               div.className = "line";
               div.textContent = content;
+              respArea.appendChild(div);
+              respArea.scrollTop = respArea.scrollHeight;
+            }
+            if (reasoning) {
+              const div = document.createElement("div");
+              div.className = "line thinking";
+              div.textContent = "🤔 " + reasoning;
               respArea.appendChild(div);
               respArea.scrollTop = respArea.scrollHeight;
             }

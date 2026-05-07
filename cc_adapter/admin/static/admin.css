@@ -253,3 +253,8 @@ body {
   word-break: break-all;
 }
 .response-area.streaming .line { margin-bottom: 4px; }
+.line.thinking {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.9em;
+}
