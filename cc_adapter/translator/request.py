@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from cc_adapter.models.openai import ChatCompletionRequest
+from cc_adapter.translator.tool_mapping import normalize_schema
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,6 @@ NOT_SUPPORTED_PARAMS = {
     "frequency_penalty": "frequency_penalty",
     "user": "user",
     "response_format": "response_format",
-    "tool_choice": "tool_choice",
 }
 
 
@@ -33,14 +33,43 @@ class RequestTranslator:
             if value is not None:
                 logger.warning("Unsupported parameter ignored: %s = %s", name, value)
 
+    @staticmethod
+    def _translate_tool_choice(tool_choice: Any) -> dict[str, Any] | None:
+        if tool_choice is None:
+            return None
+        if isinstance(tool_choice, str):
+            if tool_choice == "auto":
+                return {"type": "auto"}
+            elif tool_choice == "none":
+                return {"type": "none"}
+            elif tool_choice == "required":
+                return {"type": "any"}
+        if isinstance(tool_choice, dict):
+            name = (tool_choice.get("function") or {}).get("name")
+            if name:
+                return {"type": "tool", "name": name}
+        return {"type": "auto"}
+
+    @staticmethod
+    def _wrap_content(content: str | None) -> list[dict[str, Any]]:
+        return [{"type": "text", "text": content or ""}]
+
     def _split_messages(self, messages):
         system_prompt = None
         others = []
         for msg in messages:
             if msg.role == "system":
                 system_prompt = msg.content
+            elif msg.role == "tool":
+                d: dict[str, Any] = {
+                    "role": "user",
+                    "content": self._wrap_content(msg.content),
+                }
+                if msg.tool_call_id:
+                    d["tool_call_id"] = msg.tool_call_id
+                others.append(d)
             else:
-                d = {"role": msg.role, "content": msg.content}
+                d = {"role": msg.role, "content": self._wrap_content(msg.content)}
                 if msg.tool_calls:
                     d["tool_calls"] = [
                         {
@@ -50,8 +79,6 @@ class RequestTranslator:
                         }
                         for tc in msg.tool_calls
                     ]
-                if msg.tool_call_id:
-                    d["tool_call_id"] = msg.tool_call_id
                 if msg.name:
                     d["name"] = msg.name
                 others.append(d)
@@ -73,10 +100,13 @@ class RequestTranslator:
                 {
                     "name": t.function.name,
                     "description": t.function.description,
-                    "input_schema": t.function.parameters or {},
+                    "input_schema": normalize_schema(t.function.parameters or {}),
                 }
                 for t in req.tools
             ]
+            tool_choice = self._translate_tool_choice(req.tool_choice)
+            if tool_choice is not None:
+                params["tool_choice"] = tool_choice
         import datetime
 
         return {

@@ -8,6 +8,7 @@ from typing import AsyncGenerator
 
 from cc_adapter.models.openai import ChatCompletionResponse, ChatCompletionChunk, ChatMessageResponse, Choice, DeltaChoice, ToolCall, FunctionCall, Usage
 from cc_adapter.errors import AdapterError
+from cc_adapter.translator.tool_mapping import normalize_args
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,14 @@ def _map_finish_reason(cc_reason: str | None) -> str | None:
 
 
 def _make_tool_call(cc_event: dict, index: int = 0) -> ToolCall:
+    tool_name = cc_event.get("toolName", "")
+    raw_args = cc_event.get("input", cc_event.get("args", {}))
+    args = normalize_args(tool_name, raw_args)
     return ToolCall(
         id=cc_event.get("toolCallId", f"call_{uuid.uuid4().hex[:8]}"),
         function=FunctionCall(
             name=cc_event.get("toolName", ""),
-            arguments=json.dumps(cc_event.get("args", {})),
+            arguments=json.dumps(args),
         ),
     )
 
@@ -65,7 +69,9 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, st
                 logger.debug("Reasoning delta ignored: %s", event.get("text", "")[:50])
 
             elif event_type == "tool-call":
+                logger.info("CC tool-call event: %s", event)
                 tool_call = _make_tool_call(event, tool_call_index)
+                logger.info("Translated tool-call: id=%s name=%s args=%s", tool_call.id, tool_call.function.name, tool_call.function.arguments)
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
@@ -139,7 +145,10 @@ async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None],
             content_parts.append(event.get("text", ""))
 
         elif event_type == "tool-call":
-            tool_calls.append(_make_tool_call(event, tool_call_index))
+            logger.info("CC tool-call event (nonstream): %s", event)
+            tc = _make_tool_call(event, tool_call_index)
+            logger.info("Translated tool-call (nonstream): id=%s name=%s args=%s", tc.id, tc.function.name, tc.function.arguments)
+            tool_calls.append(tc)
             tool_call_index += 1
 
         elif event_type == "finish":

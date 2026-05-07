@@ -1,6 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
+
+
 class AppConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CC_ADAPTER_", env_file=".env", extra="ignore")
 
@@ -12,3 +15,4 @@ class AppConfig(BaseSettings):
     cc_base_url: str = "https://api.commandcode.ai"
     admin_password: str = ""
     access_key: str = ""
+    default_model: str = DEFAULT_MODEL

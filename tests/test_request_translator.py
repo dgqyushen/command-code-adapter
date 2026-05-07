@@ -41,7 +41,7 @@ def test_basic_message_translation(translator):
     )
     body, headers = translator.translate(req)
     assert body["params"]["model"] == "claude-sonnet-4-6"
-    assert body["params"]["messages"][0]["content"] == "hello"
+    assert body["params"]["messages"][0]["content"] == [{"type": "text", "text": "hello"}]
     assert body["params"]["stream"] is False
     assert body["config"]["env"] == "adapter"
     assert "Authorization" not in headers
@@ -78,6 +78,52 @@ def test_tool_translation(translator):
     body, _ = translator.translate(req)
     assert len(body["params"]["tools"]) == 1
     assert body["params"]["tools"][0]["name"] == "read_file"
+
+
+def test_tool_role_converted_to_user(translator):
+    req = ChatCompletionRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            ChatMessage(role="user", content="read file"),
+            ChatMessage(role="assistant", content=None, tool_calls=[
+                {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path":"/tmp/test"}'}}
+            ]),
+            ChatMessage(role="tool", content="file contents here", tool_call_id="call_1"),
+        ],
+    )
+    body, _ = translator.translate(req)
+    msgs = body["params"]["messages"]
+    assert len(msgs) == 3
+    assert msgs[0]["role"] == "user"
+    assert msgs[1]["role"] == "assistant"
+    assert msgs[2]["role"] == "user"
+    assert msgs[2]["content"] == [{"type": "text", "text": "file contents here"}]
+    assert msgs[2]["tool_call_id"] == "call_1"
+
+
+def test_content_wrapped_in_array(translator):
+    req = ChatCompletionRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            ChatMessage(role="user", content="hello"),
+            ChatMessage(role="assistant", content="hi there"),
+        ],
+    )
+    body, _ = translator.translate(req)
+    msgs = body["params"]["messages"]
+    assert msgs[0]["content"] == [{"type": "text", "text": "hello"}]
+    assert msgs[1]["content"] == [{"type": "text", "text": "hi there"}]
+
+
+def test_none_content_wrapped_as_empty_string(translator):
+    req = ChatCompletionRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            ChatMessage(role="assistant", content=None),
+        ],
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["messages"][0]["content"] == [{"type": "text", "text": ""}]
 
 
 def test_stream_true_passed_through(translator):

@@ -21,12 +21,13 @@ async def test_nonstream_simple_text():
 @pytest.mark.asyncio
 async def test_nonstream_tool_calls():
     async def fake_stream():
-        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read_file", "args": {"path": "/tmp/x"}}
+        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/x"}}
         yield {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
 
     result = await collect_and_translate_nonstream(fake_stream(), "gpt-5.4", time.time())
     assert len(result.choices[0].message.tool_calls) == 1
-    assert result.choices[0].message.tool_calls[0].function.name == "read_file"
+    assert result.choices[0].message.tool_calls[0].function.name == "read"
+    assert result.choices[0].message.tool_calls[0].function.arguments == '{"filePath": "/tmp/x"}'
     assert result.choices[0].finish_reason == "tool_calls"
 
 

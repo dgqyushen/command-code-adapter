@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from cc_adapter.admin.auth import generate_token, validate_token
 from cc_adapter.admin.state import get_config, get_client, init as state_init
-from cc_adapter.config import AppConfig
+from cc_adapter.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.client import CommandCodeClient
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ class ConfigUpdate(BaseModel):
     host: str | None = None
     port: int | None = None
     log_level: str | None = None
+    default_model: str | None = None
 
 
 async def verify_auth(authorization: str | None = Header(None)):
@@ -71,6 +72,15 @@ async def get_config_endpoint(_=Depends(verify_auth)):
         "port": cfg.port if cfg else 8080,
         "log_level": cfg.log_level if cfg else "INFO",
         "admin_password_configured": bool(cfg and cfg.admin_password),
+        "default_model": cfg.default_model if cfg else DEFAULT_MODEL,
+    }
+
+
+@router.get("/ui-config")
+async def ui_config():
+    cfg = get_config()
+    return {
+        "default_model": cfg.default_model if cfg else DEFAULT_MODEL,
     }
 
 
@@ -105,6 +115,7 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
         cfg.host = new_cfg.host
         cfg.port = new_cfg.port
         cfg.log_level = new_cfg.log_level
+        cfg.default_model = new_cfg.default_model
 
         from cc_adapter.admin.state import init
         new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
@@ -126,9 +137,16 @@ async def verify_key(_=Depends(verify_auth)):
             "taste": None,
             "skills": None,
             "permissionMode": "standard",
-            "params": {"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": "ping"}], "max_tokens": 10, "stream": False},
+            "params": {"model": cfg.default_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 10, "stream": False},
         }
-        async for _ in test_client.generate(test_body):
+        headers = {
+            "x-command-code-version": "0.25.2-adapter",
+            "x-cli-environment": "production",
+            "x-project-slug": "adapter",
+            "x-internal-team-flag": "false",
+            "x-taste-learning": "false",
+        }
+        async for _ in test_client.generate(test_body, headers):
             break
         return {"valid": True, "message": "API Key is valid"}
     except Exception as e:
@@ -157,6 +175,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
         "host": "CC_ADAPTER_HOST",
         "port": "CC_ADAPTER_PORT",
         "log_level": "CC_ADAPTER_LOG_LEVEL",
+        "default_model": "CC_ADAPTER_DEFAULT_MODEL",
     }
     update_map = update.model_dump(exclude_none=True)
     existing_keys = set()
@@ -196,6 +215,8 @@ def _apply_config_update(update: ConfigUpdate) -> None:
         cfg.port = update_dict["port"]
     if "log_level" in update_dict:
         cfg.log_level = update_dict["log_level"]
+    if "default_model" in update_dict:
+        cfg.default_model = update_dict["default_model"]
 
     if changed_client:
         new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)

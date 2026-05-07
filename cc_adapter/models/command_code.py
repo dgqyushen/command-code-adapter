@@ -24,7 +24,7 @@ class CCToolCall(BaseModel):
     type: Literal["tool-call"] = "tool-call"
     toolCallId: str
     toolName: str
-    args: dict[str, Any]
+    input: dict[str, Any]
 
 
 class CCToolResult(BaseModel):

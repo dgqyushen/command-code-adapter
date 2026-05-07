@@ -1,6 +1,8 @@
 # Command Code Adapter
 
-OpenAI Chat Completions 兼容适配器，用于将 Command Code API 暴露为 OpenAI 格式。
+OpenAI Chat Completions 兼容适配器，将 [Command Code API](https://api.commandcode.ai) 暴露为标准 OpenAI 格式。
+
+支持**流式（SSE）**和**非流式**响应，附带 Web 管理面板。
 
 ## 快速开始
 
@@ -15,6 +17,15 @@ export CC_API_KEY=user_your_key_here
 poetry run python -m cc_adapter
 ```
 
+服务启动后访问 `http://localhost:8080`，管理面板在 `http://localhost:8080/admin`。
+
+## Docker
+
+```bash
+docker build -t cc-adapter .
+docker run -p 8080:8080 -e CC_API_KEY=user_your_key_here cc-adapter
+```
+
 ## 配置
 
 | 环境变量 | 默认值 | 说明 |
@@ -24,6 +35,11 @@ poetry run python -m cc_adapter
 | `CC_ADAPTER_HOST` | `0.0.0.0` | 监听地址 |
 | `CC_ADAPTER_PORT` | `8080` | 监听端口 |
 | `CC_ADAPTER_LOG_LEVEL` | `INFO` | 日志级别 |
+| `CC_ADAPTER_ADMIN_PASSWORD` | — | 管理面板密码（留空则无需认证） |
+| `CC_ADAPTER_ACCESS_KEY` | — | `/v1/chat/completions` 访问密钥（留空则无需认证） |
+| `CC_ADAPTER_DEFAULT_MODEL` | `deepseek/deepseek-v4-flash` | 管理面板 Playground 默认模型 |
+
+也可通过 `.env` 文件配置（参考 `.env.example`）。
 
 ## 使用
 
@@ -37,29 +53,46 @@ curl http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-支持任意 OpenAI SDK：
+兼容任意 OpenAI SDK：
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key="not-needed",  # 实际使用 CC_API_KEY
+    api_key="not-needed",
 )
 ```
 
-## 项目结构
+## 运行测试
+
+```bash
+poetry run pytest
+```
+
+## 目录结构
 
 ```
 cc_adapter/
-├── main.py          # FastAPI 应用
-├── config.py        # 配置
-├── models/          # Pydantic 数据模型
-├── translator/      # 请求/响应格式转换
-├── client.py        # CC API HTTP 客户端
-└── errors.py        # 错误处理
+├── main.py                # FastAPI 应用入口与路由
+├── config.py              # 配置管理（pydantic-settings）
+├── models/                # Pydantic 数据模型
+│   ├── openai.py          #   OpenAI ChatCompletions 格式
+│   └── command_code.py    #   Command Code API 格式
+├── translator/            # 请求/响应格式转换
+│   ├── request.py         #   OpenAI → CC
+│   └── response.py        #   CC → OpenAI
+├── client.py              # CC API HTTP 客户端
+├── errors.py              # 错误处理与状态码映射
+└── admin/                 # Web 管理面板
+    ├── router.py          #   REST API 端点
+    ├── auth.py            #   认证逻辑
+    └── static/            #   前端静态文件
+        ├── index.html
+        ├── admin.css
+        └── admin.js
 ```
 
-## 限制
+## 许可证
 
-详见 `docs/superpowers/specs/2026-05-06-command-code-adapter-design.md`
+MIT

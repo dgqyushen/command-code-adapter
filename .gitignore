@@ -1,6 +1,38 @@
-.superpowers/
+# Python
 __pycache__/
-.pytest_cache/
-.venv/
 *.pyc
+*.pyo
+*.egg
+*.whl
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
 .env
+
+# Cache & temp
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+*.log
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+.superpowers/
+docs/

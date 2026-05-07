@@ -25,6 +25,9 @@ class CommandCodeClient:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
+            "x-command-code-version": "0.25.2-adapter",
+            "x-cli-environment": "production",
+            "x-project-slug": "adapter",
             **(extra_headers or {}),
         }
 
@@ -43,7 +46,9 @@ class CommandCodeClient:
                         if not line:
                             continue
                         try:
-                            yield __import__("json").loads(line)
+                            parsed = __import__("json").loads(line)
+                            logger.debug("CC raw event: type=%s", parsed.get("type", "?"))
+                            yield parsed
                         except (ValueError, KeyError) as e:
                             logger.warning("Failed to parse CC event: %s", e)
 

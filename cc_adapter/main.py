@@ -28,7 +28,10 @@ request_translator = RequestTranslator()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.basicConfig(level=getattr(logging, config.log_level.upper(), logging.INFO))
+    log_level = getattr(logging, config.log_level.upper(), logging.INFO)
+    logging.getLogger().setLevel(log_level)
+    if not logging.getLogger().hasHandlers():
+        logging.basicConfig(level=log_level, force=True)
     set_password(config.admin_password)
     logger.info("CC Adapter starting — CC API: %s", config.cc_base_url)
     logger.info("Admin panel: http://%s:%s/admin/", config.host if config.host != "0.0.0.0" else "localhost", config.port)

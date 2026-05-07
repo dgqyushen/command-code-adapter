@@ -87,6 +87,7 @@ const i18n = {
 let lang = localStorage.getItem("cc-admin-lang") || "zh";
 let theme = localStorage.getItem("cc-admin-theme") || "light";
 let token = localStorage.getItem("cc-admin-token") || null;
+let defaultModel = "deepseek/deepseek-v4-flash";
 
 function t(key) { return i18n[lang][key] || key; }
 
@@ -277,6 +278,10 @@ async function renderConfig() {
             <option value="ERROR">ERROR</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>CC_ADAPTER_DEFAULT_MODEL</label>
+          <input type="text" id="cfg-default-model">
+        </div>
         <div class="form-actions">
           <button class="btn btn-primary" id="cfg-save">${t("save")}</button>
           <button class="btn btn-secondary" id="cfg-cancel">${t("cancel")}</button>
@@ -315,6 +320,7 @@ async function loadConfig() {
     document.getElementById("cfg-host").value = configData.host;
     document.getElementById("cfg-port").value = configData.port;
     document.getElementById("cfg-log-level").value = configData.log_level;
+    document.getElementById("cfg-default-model").value = configData.default_model;
   } catch { showToast(t("saveFailed"), "error"); }
 }
 
@@ -330,6 +336,8 @@ async function saveConfig() {
   if (port !== configData.port) body.port = port;
   const logLevel = document.getElementById("cfg-log-level").value;
   if (logLevel !== configData.log_level) body.log_level = logLevel;
+  const defaultModelVal = document.getElementById("cfg-default-model").value;
+  if (defaultModelVal !== configData.default_model) body.default_model = defaultModelVal;
   if (Object.keys(body).length === 0) { showToast("No changes", "success"); return; }
   try {
     const resp = await api("PUT", "/admin/api/config", body);
@@ -358,17 +366,22 @@ async function saveRawConfig() {
 
 // Playground
 async function renderPlayground() {
+  try {
+    const resp = await fetch("/admin/api/ui-config");
+    const cfg = await resp.json();
+    if (cfg.default_model) defaultModel = cfg.default_model;
+  } catch {}
   const el = document.getElementById("tab-playground");
   el.innerHTML = `
     <h2 data-i18n="playground">${t("playground")}</h2>
     <div class="card playground-form" style="margin-top:16px">
       <div class="form-group">
         <label data-i18n="model">${t("model")}</label>
-        <input type="text" id="pg-model" value="claude-sonnet-4-6" placeholder="claude-sonnet-4-6">
+        <input type="text" id="pg-model" value="${defaultModel}" placeholder="${defaultModel}">
       </div>
       <div class="form-group">
         <label data-i18n="messages">${t("messages")}</label>
-        <textarea id="pg-messages" placeholder='[{"role":"user","content":"Hello"}]'></textarea>
+        <textarea id="pg-messages" placeholder='[{"role":"user","content":"Hello"}]'>[{"role":"user","content":"ping"}]</textarea>
       </div>
       <div class="checkbox-row">
         <input type="checkbox" id="pg-stream" checked>
@@ -387,7 +400,7 @@ async function renderPlayground() {
 }
 
 async function sendPlayground() {
-  const model = document.getElementById("pg-model").value || "claude-sonnet-4-6";
+  const model = document.getElementById("pg-model").value || defaultModel;
   const messagesText = document.getElementById("pg-messages").value;
   const stream = document.getElementById("pg-stream").checked;
   let messages;
