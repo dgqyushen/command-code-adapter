@@ -22,3 +22,14 @@ def get_config() -> AppConfig | None:
 
 def get_client() -> CommandCodeClient | None:
     return _cc_client
+
+
+def get_base_url() -> str:
+    return _config.cc_base_url if _config else "https://api.commandcode.ai"
+
+
+def get_api_keys() -> list[str]:
+    keys = _config.cc_api_key if _config else []
+    if isinstance(keys, str):
+        return [keys] if keys else []
+    return keys
