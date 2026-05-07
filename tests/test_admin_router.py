@@ -46,6 +46,7 @@ async def test_get_config_requires_auth():
 async def test_get_config_returns_fields():
     set_password("admin123")
     from cc_adapter.admin.auth import generate_token
+
     my_token = generate_token()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/admin/api/config", headers={"Authorization": f"Bearer {my_token}"})

@@ -118,6 +118,7 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
         cfg.default_model = new_cfg.default_model
 
         from cc_adapter.admin.state import init
+
         new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
         init(cfg, new_client)
 
@@ -132,12 +133,28 @@ async def verify_key(_=Depends(verify_auth)):
     test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key, timeout=10.0)
     try:
         test_body = {
-            "config": {"env": "adapter", "workingDir": "/tmp", "date": "2026-01-01T00:00:00Z", "environment": "production", "structure": [], "isGitRepo": False, "currentBranch": "main", "mainBranch": "main", "gitStatus": "clean", "recentCommits": []},
+            "config": {
+                "env": "adapter",
+                "workingDir": "/tmp",
+                "date": "2026-01-01T00:00:00Z",
+                "environment": "production",
+                "structure": [],
+                "isGitRepo": False,
+                "currentBranch": "main",
+                "mainBranch": "main",
+                "gitStatus": "clean",
+                "recentCommits": [],
+            },
             "memory": "",
             "taste": None,
             "skills": None,
             "permissionMode": "standard",
-            "params": {"model": cfg.default_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 10, "stream": False},
+            "params": {
+                "model": cfg.default_model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 10,
+                "stream": False,
+            },
         }
         headers = {
             "x-command-code-version": "0.25.2-adapter",
@@ -197,6 +214,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
 
 def _apply_config_update(update: ConfigUpdate) -> None:
     from cc_adapter.admin.state import init
+
     update_dict = update.model_dump(exclude_none=True)
     cfg = get_config()
     if cfg is None:

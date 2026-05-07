@@ -6,7 +6,16 @@ import uuid
 import time
 from typing import AsyncGenerator
 
-from cc_adapter.models.openai import ChatCompletionResponse, ChatCompletionChunk, ChatMessageResponse, Choice, DeltaChoice, ToolCall, FunctionCall, Usage
+from cc_adapter.models.openai import (
+    ChatCompletionResponse,
+    ChatCompletionChunk,
+    ChatMessageResponse,
+    Choice,
+    DeltaChoice,
+    ToolCall,
+    FunctionCall,
+    Usage,
+)
 from cc_adapter.errors import AdapterError
 from cc_adapter.translator.tool_mapping import normalize_args
 
@@ -46,7 +55,9 @@ def _make_tool_call(cc_event: dict, index: int = 0, include_index: bool = False)
     )
 
 
-async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, start_time: float) -> AsyncGenerator[str, None]:
+async def translate_stream(
+    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float
+) -> AsyncGenerator[str, None]:
     """Translate CC SSE events into OpenAI SSE chunks on the fly."""
     response_id = _generate_id()
     created = _now()
@@ -71,16 +82,19 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, st
                     id=response_id,
                     created=created,
                     model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(
-                        reasoning_content=event.get("text", "")
-                    ))],
+                    choices=[DeltaChoice(delta=ChatMessageResponse(reasoning_content=event.get("text", "")))],
                 )
                 yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
             elif event_type == "tool-call":
                 logger.info("CC tool-call event: %s", event)
                 tool_call = _make_tool_call(event, tool_call_index, include_index=True)
-                logger.info("Translated tool-call: id=%s name=%s args=%s", tool_call.id, tool_call.function.name, tool_call.function.arguments)
+                logger.info(
+                    "Translated tool-call: id=%s name=%s args=%s",
+                    tool_call.id,
+                    tool_call.function.name,
+                    tool_call.function.arguments,
+                )
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
@@ -103,8 +117,14 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, st
                         total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
                     )
                     elapsed = time.time() - start_time
-                    logger.info("Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
-                                model, usage.prompt_tokens, usage.completion_tokens, usage.total_tokens, elapsed)
+                    logger.info(
+                        "Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
+                        model,
+                        usage.prompt_tokens,
+                        usage.completion_tokens,
+                        usage.total_tokens,
+                        elapsed,
+                    )
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
@@ -137,7 +157,9 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, st
     yield "data: [DONE]\n\n"
 
 
-async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None], model: str, start_time: float) -> ChatCompletionResponse:
+async def collect_and_translate_nonstream(
+    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float
+) -> ChatCompletionResponse:
     """Collect all CC SSE events and build a single ChatCompletionResponse."""
     response_id = _generate_id()
     created = _now()
@@ -160,7 +182,12 @@ async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None],
         elif event_type == "tool-call":
             logger.info("CC tool-call event (nonstream): %s", event)
             tc = _make_tool_call(event, tool_call_index)
-            logger.info("Translated tool-call (nonstream): id=%s name=%s args=%s", tc.id, tc.function.name, tc.function.arguments)
+            logger.info(
+                "Translated tool-call (nonstream): id=%s name=%s args=%s",
+                tc.id,
+                tc.function.name,
+                tc.function.arguments,
+            )
             tool_calls.append(tc)
             tool_call_index += 1
 
@@ -174,8 +201,14 @@ async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None],
                     total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
                 )
                 elapsed = time.time() - start_time
-                logger.info("Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
-                            model, usage.prompt_tokens, usage.completion_tokens, usage.total_tokens, elapsed)
+                logger.info(
+                    "Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
+                    model,
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                    usage.total_tokens,
+                    elapsed,
+                )
 
         elif event_type == "error":
             err_data = event.get("error", {})

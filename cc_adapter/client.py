@@ -54,6 +54,7 @@ class CommandCodeClient:
 
             except httpx.TimeoutException:
                 from cc_adapter.errors import TimeoutError_
+
                 raise TimeoutError_("Command Code API request timed out")
             except httpx.HTTPStatusError as e:
                 raise map_upstream_error(e.response.status_code, str(e))

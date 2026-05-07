@@ -85,9 +85,17 @@ def test_tool_role_converted_to_user(translator):
         model="claude-sonnet-4-6",
         messages=[
             ChatMessage(role="user", content="read file"),
-            ChatMessage(role="assistant", content=None, tool_calls=[
-                {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path":"/tmp/test"}'}}
-            ]),
+            ChatMessage(
+                role="assistant",
+                content=None,
+                tool_calls=[
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": '{"path":"/tmp/test"}'},
+                    }
+                ],
+            ),
             ChatMessage(role="tool", content="file contents here", tool_call_id="call_1"),
         ],
     )

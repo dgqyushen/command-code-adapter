@@ -20,16 +20,12 @@ def _password_hash() -> str:
 
 
 def _sign(payload: str) -> str:
-    return hmac.new(
-        _admin_password.encode(), payload.encode(), hashlib.sha256
-    ).hexdigest()
+    return hmac.new(_admin_password.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
 def generate_token() -> str:
     exp = int(time.time()) + _TOKEN_TTL
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"exp": exp, "pwh": _password_hash()}).encode()
-    ).decode()
+    payload = base64.urlsafe_b64encode(json.dumps({"exp": exp, "pwh": _password_hash()}).encode()).decode()
     sig = _sign(payload)
     return f"{payload}.{sig}"
 
