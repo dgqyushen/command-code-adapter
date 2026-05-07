@@ -11,7 +11,10 @@ if [ -f .env ]; then
     set +a
 fi
 
+LOG_LEVEL="${CC_ADAPTER_LOG_LEVEL:-info}"
+LOG_LEVEL="$(echo "$LOG_LEVEL" | tr '[:upper:]' '[:lower:]')"
+
 exec poetry run uvicorn cc_adapter.main:app \
     --host "${CC_ADAPTER_HOST:-0.0.0.0}" \
     --port "${CC_ADAPTER_PORT:-8080}" \
-    --log-level "${CC_ADAPTER_LOG_LEVEL:-info}"
+    --log-level "$LOG_LEVEL"
