@@ -22,7 +22,7 @@ from cc_adapter.admin.state import init as admin_init, get_client as get_admin_c
 
 logger = logging.getLogger(__name__)
 config = AppConfig()
-cc_client = CommandCodeClient(base_url=config.cc_base_url, api_key=config.cc_api_key)
+cc_client = CommandCodeClient(base_url=config.cc_base_url, api_key=config.cc_api_key[0] if config.cc_api_key else "")
 request_translator = RequestTranslator()
 
 
