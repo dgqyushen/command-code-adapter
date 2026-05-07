@@ -41,7 +41,7 @@ def _make_tool_call(cc_event: dict, index: int = 0) -> ToolCall:
     )
 
 
-async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str) -> AsyncGenerator[str, None]:
+async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, start_time: float) -> AsyncGenerator[str, None]:
     """Translate CC SSE events into OpenAI SSE chunks on the fly."""
     response_id = _generate_id()
     created = _now()
@@ -87,6 +87,9 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str) ->
                         completion_tokens=raw_usage.get("outputTokens", 0),
                         total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
                     )
+                    elapsed = time.time() - start_time
+                    logger.info("Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
+                                model, usage.prompt_tokens, usage.completion_tokens, usage.total_tokens, elapsed)
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
@@ -119,7 +122,7 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str) ->
     yield "data: [DONE]\n\n"
 
 
-async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None], model: str) -> ChatCompletionResponse:
+async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None], model: str, start_time: float) -> ChatCompletionResponse:
     """Collect all CC SSE events and build a single ChatCompletionResponse."""
     response_id = _generate_id()
     created = _now()
@@ -148,6 +151,9 @@ async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None],
                     completion_tokens=raw_usage.get("outputTokens", 0),
                     total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
                 )
+                elapsed = time.time() - start_time
+                logger.info("Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
+                            model, usage.prompt_tokens, usage.completion_tokens, usage.total_tokens, elapsed)
 
         elif event_type == "error":
             err_data = event.get("error", {})

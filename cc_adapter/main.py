@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -74,6 +75,8 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     cc_body, cc_headers = request_translator.translate(req)
     cc_body["params"]["stream"] = True
 
+    start_time = time.time()
+
     current_client = get_admin_client() or cc_client
     if not current_client.api_key:
         raise AuthenticationError("CC_API_KEY is not configured")
@@ -82,7 +85,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 
     if req.stream:
         return StreamingResponse(
-            translate_stream(cc_stream, req.model),
+            translate_stream(cc_stream, req.model, start_time),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -91,7 +94,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
             },
         )
     else:
-        result = await collect_and_translate_nonstream(cc_stream, req.model)
+        result = await collect_and_translate_nonstream(cc_stream, req.model, start_time)
         return result
 
 
