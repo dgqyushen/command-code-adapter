@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import re
 import logging
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 
 from cc_adapter.admin.auth import generate_token, validate_token
 from cc_adapter.admin.state import get_config, get_client, init as state_init
+from cc_adapter.config import AppConfig
 from cc_adapter.client import CommandCodeClient
 
 logger = logging.getLogger(__name__)
@@ -77,6 +79,38 @@ async def update_config(update: ConfigUpdate, _=Depends(verify_auth)):
     _update_env_file(update)
     _apply_config_update(update)
     return await get_config_endpoint()
+
+
+@router.get("/config/raw")
+async def get_raw_config(_=Depends(verify_auth)):
+    env_path = Path(".env")
+    content = env_path.read_text() if env_path.exists() else ""
+    return {"content": content}
+
+
+class RawConfigUpdate(BaseModel):
+    content: str
+
+
+@router.put("/config/raw")
+async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
+    env_path = Path(".env")
+    env_path.write_text(update.content)
+
+    cfg = get_config()
+    if cfg:
+        new_cfg = AppConfig(_env_file=".env")
+        cfg.cc_api_key = new_cfg.cc_api_key
+        cfg.cc_base_url = new_cfg.cc_base_url
+        cfg.host = new_cfg.host
+        cfg.port = new_cfg.port
+        cfg.log_level = new_cfg.log_level
+
+        from cc_adapter.admin.state import init
+        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
+        init(cfg, new_client)
+
+    return {"content": update.content}
 
 
 @router.post("/verify-key")

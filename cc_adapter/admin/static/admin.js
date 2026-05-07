@@ -34,6 +34,10 @@ const i18n = {
     configHost: "监听地址",
     configPort: "监听端口",
     configLogLevel: "日志级别",
+    rawMode: "源文件编辑",
+    formMode: "表单编辑",
+    rawSave: "保存源文件",
+    rawSaved: "源文件保存成功",
     themeDark: "Dark",
     themeLight: "Light",
   },
@@ -71,6 +75,10 @@ const i18n = {
     configHost: "Host",
     configPort: "Port",
     configLogLevel: "Log Level",
+    rawMode: "Raw Edit",
+    formMode: "Form Edit",
+    rawSave: "Save Raw",
+    rawSaved: "Raw file saved",
     themeDark: "Dark",
     themeLight: "Light",
   },
@@ -232,45 +240,70 @@ async function verifyKey() {
 
 // Config
 let configData = null;
+let configRawMode = false;
 
 async function renderConfig() {
   const el = document.getElementById("tab-config");
   el.innerHTML = `
     <h2 data-i18n="config">${t("config")}</h2>
-    <div class="card" style="margin-top:16px">
-      <div class="form-group">
-        <label>CC_API_KEY</label>
-        <input type="password" id="cfg-key" autocomplete="new-password">
+    <div style="margin-bottom:12px">
+      <button class="btn ${configRawMode ? 'btn-primary' : 'btn-secondary'}" id="cfg-toggle-raw">${t("rawMode")}</button>
+      <button class="btn ${configRawMode ? 'btn-secondary' : 'btn-primary'}" id="cfg-toggle-form">${t("formMode")}</button>
+    </div>
+    <div id="cfg-form-view" class="${configRawMode ? 'hidden' : ''}">
+      <div class="card">
+        <div class="form-group">
+          <label>CC_API_KEY</label>
+          <input type="password" id="cfg-key" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label>CC_BASE_URL</label>
+          <input type="text" id="cfg-base-url">
+        </div>
+        <div class="form-group">
+          <label>CC_ADAPTER_HOST</label>
+          <input type="text" id="cfg-host">
+        </div>
+        <div class="form-group">
+          <label>CC_ADAPTER_PORT</label>
+          <input type="number" id="cfg-port">
+        </div>
+        <div class="form-group">
+          <label>CC_ADAPTER_LOG_LEVEL</label>
+          <select id="cfg-log-level">
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="cfg-save">${t("save")}</button>
+          <button class="btn btn-secondary" id="cfg-cancel">${t("cancel")}</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label>CC_BASE_URL</label>
-        <input type="text" id="cfg-base-url">
-      </div>
-      <div class="form-group">
-        <label>CC_ADAPTER_HOST</label>
-        <input type="text" id="cfg-host">
-      </div>
-      <div class="form-group">
-        <label>CC_ADAPTER_PORT</label>
-        <input type="number" id="cfg-port">
-      </div>
-      <div class="form-group">
-        <label>CC_ADAPTER_LOG_LEVEL</label>
-        <select id="cfg-log-level">
-          <option value="DEBUG">DEBUG</option>
-          <option value="INFO">INFO</option>
-          <option value="WARNING">WARNING</option>
-          <option value="ERROR">ERROR</option>
-        </select>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary" id="cfg-save">${t("save")}</button>
-        <button class="btn btn-secondary" id="cfg-cancel">${t("cancel")}</button>
+    </div>
+    <div id="cfg-raw-view" class="${configRawMode ? '' : 'hidden'}">
+      <div class="card">
+        <div class="form-group">
+          <label>.env</label>
+          <textarea id="cfg-raw-content" style="width:100%;min-height:300px;font-family:monospace;font-size:13px;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);resize:vertical"></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="cfg-raw-save">${t("rawSave")}</button>
+        </div>
       </div>
     </div>`;
-  loadConfig();
-  document.getElementById("cfg-save").onclick = saveConfig;
-  document.getElementById("cfg-cancel").onclick = loadConfig;
+  document.getElementById("cfg-toggle-raw").onclick = () => { configRawMode = true; renderConfig(); };
+  document.getElementById("cfg-toggle-form").onclick = () => { configRawMode = false; renderConfig(); };
+  if (configRawMode) {
+    loadRawConfig();
+    document.getElementById("cfg-raw-save").onclick = saveRawConfig;
+  } else {
+    loadConfig();
+    document.getElementById("cfg-save").onclick = saveConfig;
+    document.getElementById("cfg-cancel").onclick = loadConfig;
+  }
 }
 
 async function loadConfig() {
@@ -303,6 +336,23 @@ async function saveConfig() {
     if (!resp.ok) throw new Error(await resp.text());
     configData = await resp.json();
     showToast(t("saved"), "success");
+  } catch { showToast(t("saveFailed"), "error"); }
+}
+
+async function loadRawConfig() {
+  try {
+    const resp = await api("GET", "/admin/api/config/raw");
+    const data = await resp.json();
+    document.getElementById("cfg-raw-content").value = data.content;
+  } catch { showToast(t("saveFailed"), "error"); }
+}
+
+async function saveRawConfig() {
+  const content = document.getElementById("cfg-raw-content").value;
+  try {
+    const resp = await api("PUT", "/admin/api/config/raw", { content });
+    if (!resp.ok) throw new Error(await resp.text());
+    showToast(t("rawSaved"), "success");
   } catch { showToast(t("saveFailed"), "error"); }
 }
 
