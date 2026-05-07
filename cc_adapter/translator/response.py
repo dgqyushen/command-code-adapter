@@ -66,7 +66,15 @@ async def translate_stream(cc_stream: AsyncGenerator[dict, None], model: str, st
                 yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
             elif event_type == "reasoning-delta":
-                logger.debug("Reasoning delta ignored: %s", event.get("text", "")[:50])
+                chunk = ChatCompletionChunk(
+                    id=response_id,
+                    created=created,
+                    model=model,
+                    choices=[DeltaChoice(delta=ChatMessageResponse(
+                        reasoning_content=event.get("text", "")
+                    ))],
+                )
+                yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
             elif event_type == "tool-call":
                 logger.info("CC tool-call event: %s", event)

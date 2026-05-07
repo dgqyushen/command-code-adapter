@@ -45,3 +45,23 @@ async def test_stream_output():
     assert 'data: {"id":"chatcmpl-' in chunks[0]
     assert '"content":"Hi"' in chunks[0]
     assert chunks[2] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_stream_reasoning_content():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Let me think"}
+        yield {"type": "reasoning-delta", "text": " about this step by step"}
+        yield {"type": "text-delta", "text": "Here is my answer"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 3}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    # reasoning-delta chunks should have reasoning_content but no content
+    assert '"reasoning_content":"Let me think"' in chunks[0]
+    assert '"reasoning_content":" about this step by step"' in chunks[1]
+    # text-delta chunk should have content but no reasoning_content
+    assert '"content":"Here is my answer"' in chunks[2]
+    assert chunks[-1] == "data: [DONE]\n\n"
