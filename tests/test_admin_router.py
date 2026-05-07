@@ -75,3 +75,17 @@ async def test_update_config_uses_first_configured_key_for_client(tmp_path, monk
     assert resp.status_code == 200
     assert get_config().cc_api_key == ["user_one", "user_two"]
     assert get_client().api_key == "user_one"
+
+
+@pytest.mark.asyncio
+async def test_usage_query_returns_empty_when_no_keys():
+    from cc_adapter.admin.state import init as admin_state_init, get_config
+    from cc_adapter.admin.auth import generate_token
+
+    cfg = get_config()
+    cfg.cc_api_key = []
+    my_token = generate_token()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/admin/api/usage/query", headers={"Authorization": f"Bearer {my_token}"})
+    assert resp.status_code == 200
+    assert resp.json() == []
