@@ -1,3 +1,6 @@
+import json
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,8 +14,25 @@ class AppConfig(BaseSettings):
     port: int = 8080
     log_level: str = "INFO"
 
-    cc_api_key: str = ""
+    cc_api_key: str | list[str] = []
     cc_base_url: str = "https://api.commandcode.ai"
     admin_password: str = ""
     access_key: str = ""
     default_model: str = DEFAULT_MODEL
+
+    @field_validator("cc_api_key", mode="before")
+    @classmethod
+    def coerce_api_key(cls, v):
+        if isinstance(v, str):
+            if not v:
+                return []
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+            return [v]
+        if isinstance(v, list):
+            return v
+        return []

@@ -15,6 +15,7 @@ from cc_adapter.admin.auth import generate_token, validate_token
 from cc_adapter.admin.state import get_config, get_client, init as state_init
 from cc_adapter.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.client import CommandCodeClient
+from cc_adapter.admin.usage_client import query_all_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,27 @@ class ConfigUpdate(BaseModel):
     port: int | None = None
     log_level: str | None = None
     default_model: str | None = None
+
+
+def _normalize_api_keys(value: str | list[str] | None) -> list[str]:
+    if isinstance(value, list):
+        return [key for key in value if key]
+    if isinstance(value, str):
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [key for key in parsed if key]
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return [value]
+    return []
+
+
+def _primary_api_key(value: str | list[str] | None) -> str:
+    keys = _normalize_api_keys(value)
+    return keys[0] if keys else ""
 
 
 async def verify_auth(authorization: str | None = Header(None)):
@@ -66,7 +88,7 @@ async def login(req: LoginRequest):
 async def get_config_endpoint(_=Depends(verify_auth)):
     cfg = get_config()
     return {
-        "cc_api_key": "****" if cfg and cfg.cc_api_key else "",
+        "cc_api_key": f"{len(cfg.cc_api_key)} key(s) configured" if cfg and cfg.cc_api_key else "",
         "cc_base_url": cfg.cc_base_url if cfg else "",
         "host": cfg.host if cfg else "",
         "port": cfg.port if cfg else 8080,
@@ -118,8 +140,7 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
         cfg.default_model = new_cfg.default_model
 
         from cc_adapter.admin.state import init
-
-        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
+        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key))
         init(cfg, new_client)
 
     return {"content": update.content}
@@ -128,9 +149,9 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
 @router.post("/verify-key")
 async def verify_key(_=Depends(verify_auth)):
     cfg = get_config()
-    if not cfg or not cfg.cc_api_key:
+    if not cfg or not _primary_api_key(cfg.cc_api_key):
         return {"valid": False, "message": "No API Key configured"}
-    test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key, timeout=10.0)
+    test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key), timeout=10.0)
     try:
         test_body = {
             "config": {
@@ -170,6 +191,15 @@ async def verify_key(_=Depends(verify_auth)):
         return {"valid": False, "message": str(e)}
 
 
+@router.post("/usage/query")
+async def admin_usage_query(_=Depends(verify_auth)):
+    cfg = get_config()
+    if not cfg or not cfg.cc_api_key:
+        return []
+    results = await query_all_tokens(cfg.cc_base_url, cfg.cc_api_key)
+    return results
+
+
 @router.get("/health")
 async def admin_health(_=Depends(verify_auth)):
     cfg = get_config()
@@ -187,7 +217,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
         env_path.write_text("")
     lines = env_path.read_text().splitlines(keepends=True)
     field_map = {
-        "cc_api_key": "CC_API_KEY",
+        "cc_api_key": "CC_ADAPTER_CC_API_KEY",
         "cc_base_url": "CC_BASE_URL",
         "host": "CC_ADAPTER_HOST",
         "port": "CC_ADAPTER_PORT",
@@ -203,12 +233,19 @@ def _update_env_file(update: ConfigUpdate) -> None:
         key = stripped.split("=", 1)[0].strip()
         for field_name, env_key in field_map.items():
             if key == env_key and field_name in update_map:
-                value = update_map[field_name]
-                lines[i] = f"{env_key}={value}\n"
+                value = _normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
+                if field_name == "cc_api_key":
+                    lines[i] = f"{env_key}={json.dumps(value)}\n"
+                else:
+                    lines[i] = f"{env_key}={value}\n"
                 existing_keys.add(field_name)
     for field_name, env_key in field_map.items():
         if field_name in update_map and field_name not in existing_keys:
-            lines.append(f"{env_key}={update_map[field_name]}\n")
+            value = _normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
+            if field_name == "cc_api_key":
+                lines.append(f"{env_key}={json.dumps(value)}\n")
+            else:
+                lines.append(f"{env_key}={update_map[field_name]}\n")
     env_path.write_text("".join(lines))
 
 
@@ -222,7 +259,7 @@ def _apply_config_update(update: ConfigUpdate) -> None:
 
     changed_client = False
     if "cc_api_key" in update_dict:
-        cfg.cc_api_key = update_dict["cc_api_key"]
+        cfg.cc_api_key = _normalize_api_keys(update_dict["cc_api_key"])
         changed_client = True
     if "cc_base_url" in update_dict:
         cfg.cc_base_url = update_dict["cc_base_url"]
@@ -237,5 +274,5 @@ def _apply_config_update(update: ConfigUpdate) -> None:
         cfg.default_model = update_dict["default_model"]
 
     if changed_client:
-        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
+        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key))
         init(cfg, new_client)

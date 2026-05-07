@@ -40,6 +40,26 @@ const i18n = {
     rawSaved: "源文件保存成功",
     themeDark: "Dark",
     themeLight: "Light",
+    tokenUsage: "Token 用量",
+    manage: "管理",
+    refresh: "刷新",
+    noTokens: "暂未配置 Token",
+    addToken: "添加 Token",
+    tokenLabel: "标签",
+    tokenKey: "API Key",
+    tokenAccount: "用户名",
+    tokenPlan: "套餐",
+    tokenPeriod: "结算周期",
+    tokenUsed: "已用量",
+    tokenTotal: "总额度",
+    tokenModels: "模型分布",
+    tokenNormal: "正常",
+    tokenInvalid: "无效",
+    tokenNetworkError: "网络错误",
+    tokenManageTitle: "管理 Token",
+    tokenRemove: "删除",
+    tokenSave: "保存",
+    tokenCancel: "取消",
   },
   en: {
     title: "CC Adapter Admin",
@@ -81,6 +101,26 @@ const i18n = {
     rawSaved: "Raw file saved",
     themeDark: "Dark",
     themeLight: "Light",
+    tokenUsage: "Token Usage",
+    manage: "Manage",
+    refresh: "Refresh",
+    noTokens: "No tokens configured",
+    addToken: "Add Token",
+    tokenLabel: "Label",
+    tokenKey: "API Key",
+    tokenAccount: "User",
+    tokenPlan: "Plan",
+    tokenPeriod: "Period",
+    tokenUsed: "Used",
+    tokenTotal: "Total",
+    tokenModels: "Models",
+    tokenNormal: "Normal",
+    tokenInvalid: "Invalid",
+    tokenNetworkError: "Network Error",
+    tokenManageTitle: "Manage Tokens",
+    tokenRemove: "Remove",
+    tokenSave: "Save",
+    tokenCancel: "Cancel",
   },
 };
 
@@ -205,6 +245,7 @@ async function renderDashboard() {
     </div>`;
   loadDashboard();
   document.getElementById("verify-key-btn").onclick = verifyKey;
+  renderUsageSection();
 }
 
 async function loadDashboard() {
@@ -237,6 +278,172 @@ async function verifyKey() {
   } catch { showToast(t("saveFailed"), "error"); }
   btn.textContent = t("verify");
   btn.disabled = false;
+}
+
+// Token Usage
+function renderUsageSection() {
+  const container = document.getElementById("tab-dashboard");
+  const section = document.createElement("div");
+  section.className = "token-usage-section";
+  section.innerHTML = `
+    <div class="token-usage-header">
+      <h3>${t("tokenUsage")}</h3>
+      <div class="token-actions">
+        <button class="btn btn-secondary" id="usage-manage-btn">${t("manage")}</button>
+        <button class="btn btn-primary" id="usage-refresh-btn">${t("refresh")}</button>
+      </div>
+    </div>
+    <div id="usage-cards-container">
+      <div class="token-empty">Loading...</div>
+    </div>`;
+  container.appendChild(section);
+  document.getElementById("usage-refresh-btn").onclick = loadUsageData;
+  document.getElementById("usage-manage-btn").onclick = showTokenManager;
+  loadUsageData();
+}
+
+async function loadUsageData() {
+  const container = document.getElementById("usage-cards-container");
+  if (!container) return;
+  container.innerHTML = '<div class="token-empty">Loading...</div>';
+  try {
+    const resp = await api("POST", "/admin/api/usage/query");
+    const data = await resp.json();
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div class="token-empty">${t("noTokens")}</div>`;
+      return;
+    }
+    container.innerHTML = "";
+    for (const item of data) {
+      container.appendChild(renderTokenCard(item));
+    }
+  } catch {
+    container.innerHTML = `<div class="token-empty">Error loading usage data</div>`;
+  }
+}
+
+function renderTokenCard(item) {
+  const card = document.createElement("div");
+  card.className = "token-card" + (item.ok ? "" : " error");
+  const labelKey = localStorage.getItem("cc-token-label-" + item.token) || item.label || "";
+
+  if (item.ok) {
+    const usage = item.usage || { total_cost: 0, total_count: 0, models: [] };
+    const credits = item.credits || { total: 0, monthly: 0, purchased: 0, free: 0 };
+    const sub = item.subscription || { plan_name: "", status: "", period_start: "", period_end: "" };
+    const user = item.user || { name: "", email: "" };
+    const pct = credits.total > 0 ? Math.min(100, Math.round((usage.total_cost / credits.total) * 100)) : 0;
+    let barClass = "token-usage-bar-fill";
+    if (pct >= 90) barClass += " danger";
+    else if (pct >= 75) barClass += " warning";
+    const periodStr = sub.period_start ? `${sub.period_start.slice(0, 10)} ~ ${sub.period_end.slice(0, 10)}` : "";
+    const modelsHtml = usage.models && usage.models.length > 0
+      ? usage.models.map(m => `${m.model_id.split("/").pop()} $${m.total_cost} (${m.total_count})`).join(" · ")
+      : "";
+    card.innerHTML = `
+      <div class="token-card-header">
+        <div>
+          <span class="status-dot ok"></span>
+          <strong title="${item.token}">${item.token.slice(0, 10)}...${item.token.slice(-6)}</strong>
+          ${labelKey ? `<span class="token-label-badge">${labelKey}</span>` : ""}
+        </div>
+        <span style="font-size:12px;color:var(--success)">${t("tokenNormal")}</span>
+      </div>
+      <div class="token-card-info">
+        ${user.name ? `<div><div class="label">${t("tokenAccount")}</div><div class="value">${user.name}</div></div>` : ""}
+        ${sub.plan_name ? `<div><div class="label">${t("tokenPlan")}</div><div class="value">${sub.plan_name} <span style="color:var(--text-muted);font-size:11px">(${sub.status})</span></div></div>` : ""}
+        ${user.email ? `<div><div class="label">Email</div><div class="value">${user.email}</div></div>` : ""}
+        ${periodStr ? `<div><div class="label">${t("tokenPeriod")}</div><div class="value">${periodStr}</div></div>` : ""}
+      </div>
+      <div class="token-usage-bar">
+        <div class="token-usage-bar-header">
+          <span>${t("tokenUsed")} / ${t("tokenTotal")}</span>
+          <span><strong>$${usage.total_cost.toFixed(2)}</strong> / $${credits.total.toFixed(2)}</span>
+        </div>
+        <div class="token-usage-bar-track">
+          <div class="${barClass}" style="width:${pct}%"></div>
+        </div>
+      </div>
+      ${modelsHtml ? `<div class="token-models">${t("tokenModels")}: ${modelsHtml}</div>` : ""}`;
+  } else {
+    const errMsg = item.error || "Unknown error";
+    card.innerHTML = `
+      <div class="token-card-header">
+        <div>
+          <span class="status-dot err"></span>
+          <strong title="${item.token}">${item.token.slice(0, 10)}...${item.token.slice(-6)}</strong>
+          ${labelKey ? `<span class="token-label-badge">${labelKey}</span>` : ""}
+        </div>
+        <span style="font-size:12px;color:var(--error)">${t("tokenInvalid")}</span>
+      </div>
+      <div class="token-error-text">${errMsg}</div>`;
+  }
+  return card;
+}
+
+function showTokenManager() {
+  const overlay = document.createElement("div");
+  overlay.id = "token-manager-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:300;";
+  overlay.innerHTML = `
+    <div class="card" style="width:520px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+      <h3 style="margin-bottom:16px">${t("tokenManageTitle")}</h3>
+      <div style="margin-bottom:12px;display:flex;gap:8px;">
+        <input id="tm-label" placeholder="${t("tokenLabel")}" style="width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;">
+        <input id="tm-key" placeholder="${t("tokenKey")}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;font-family:monospace;">
+        <button id="tm-add" class="btn btn-primary" style="padding:6px 14px;font-size:13px;">${t("addToken")}</button>
+      </div>
+      <div id="tm-list"></div>
+      <div class="form-actions" style="margin-top:16px;">
+        <button id="tm-save" class="btn btn-primary">${t("tokenSave")}</button>
+        <button class="btn btn-secondary" onclick="this.closest('#token-manager-overlay').remove()">${t("tokenCancel")}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const listEl = overlay.querySelector("#tm-list");
+
+  document.getElementById("tm-add").onclick = () => {
+    const keyInput = document.getElementById("tm-key");
+    const labelInput = document.getElementById("tm-label");
+    const keyVal = keyInput.value.trim();
+    if (!keyVal) return;
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);";
+    row.innerHTML = `
+      <input class="tm-item-label" value="${labelInput.value.trim()}" placeholder="${t("tokenLabel")}" style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;">
+      <code style="flex:1;font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${keyVal.slice(0, 12)}...${keyVal.slice(-8)}</code>
+      <button style="color:var(--error);background:none;border:none;cursor:pointer;font-size:16px;" onclick="this.parentElement.remove()">&times;</button>`;
+    listEl.appendChild(row);
+    keyInput.value = "";
+    labelInput.value = "";
+  };
+
+  document.getElementById("tm-save").onclick = async () => {
+    const items = listEl.querySelectorAll(".tm-item-label");
+    const tokens = [];
+    // Reconstruct from DOM: each row has a label input and a code element
+    const rows = listEl.children;
+    for (const row of rows) {
+      const labelInput = row.querySelector(".tm-item-label");
+      const codeEl = row.querySelector("code");
+      if (codeEl) {
+        const keyVal = codeEl.textContent.replace("...", "");
+        tokens.push(keyVal);
+        if (labelInput && labelInput.value) {
+          localStorage.setItem("cc-token-label-" + keyVal, labelInput.value);
+        }
+      }
+    }
+    const body = { cc_api_key: JSON.stringify(tokens) };
+    try {
+      const resp = await api("PUT", "/admin/api/config", body);
+      if (!resp.ok) throw new Error(await resp.text());
+      showToast(t("saved"), "success");
+      overlay.remove();
+      loadUsageData();
+    } catch { showToast(t("saveFailed"), "error"); }
+  };
 }
 
 // Config
@@ -315,7 +522,7 @@ async function loadConfig() {
   try {
     const resp = await api("GET", "/admin/api/config");
     configData = await resp.json();
-    document.getElementById("cfg-key").value = configData.cc_api_key === "****" ? "" : configData.cc_api_key;
+    document.getElementById("cfg-key").value = configData.cc_api_key;
     document.getElementById("cfg-base-url").value = configData.cc_base_url;
     document.getElementById("cfg-host").value = configData.host;
     document.getElementById("cfg-port").value = configData.port;
