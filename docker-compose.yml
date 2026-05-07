@@ -1,6 +1,6 @@
 services:
   cc-adapter:
-    build: .
+    image: dgqyushen/command-code-proxy:latest
     container_name: cc-adapter
     restart: unless-stopped
     ports:

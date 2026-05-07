@@ -134,3 +134,39 @@ def test_stream_true_passed_through(translator):
     )
     body, _ = translator.translate(req)
     assert body["params"]["stream"] is True
+
+
+def test_normalize_deepseek_model(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-flash",
+        messages=[ChatMessage(role="user", content="hi")],
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["model"] == "deepseek/deepseek-v4-flash"
+
+
+def test_normalize_deepseek_v4_pro(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-pro",
+        messages=[ChatMessage(role="user", content="hi")],
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["model"] == "deepseek/deepseek-v4-pro"
+
+
+def test_normalize_qualified_model_passthrough(translator):
+    req = ChatCompletionRequest(
+        model="deepseek/deepseek-v4-flash",
+        messages=[ChatMessage(role="user", content="hi")],
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["model"] == "deepseek/deepseek-v4-flash"
+
+
+def test_normalize_default_provider_model_unchanged(translator):
+    req = ChatCompletionRequest(
+        model="claude-sonnet-4-6",
+        messages=[ChatMessage(role="user", content="hi")],
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["model"] == "claude-sonnet-4-6"

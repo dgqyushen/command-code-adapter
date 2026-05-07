@@ -8,6 +8,20 @@ from cc_adapter.translator.tool_mapping import normalize_schema
 
 logger = logging.getLogger(__name__)
 
+MODEL_PROVIDER_MAP: dict[str, str] = {
+    "deepseek-v4-pro": "deepseek",
+    "deepseek-v4-flash": "deepseek",
+    "kimi-k2-6": "kimi",
+    "kimi-k2-5": "kimi",
+    "glm-5-1": "glm",
+    "glm-5": "glm",
+    "minimax-m2-7": "minimax",
+    "minimax-m2-5": "minimax",
+    "qwen-3-6-max-preview": "qwen",
+    "qwen-3-6-plus": "qwen",
+    "step-3-5-flash": "step",
+}
+
 NOT_SUPPORTED_PARAMS = {
     "top_p": "top_p",
     "stop": "stop",
@@ -84,9 +98,18 @@ class RequestTranslator:
                 others.append(d)
         return system_prompt, others
 
+    @staticmethod
+    def _normalize_model(model: str) -> str:
+        if "/" in model:
+            return model
+        prefix = MODEL_PROVIDER_MAP.get(model)
+        if prefix:
+            return f"{prefix}/{model}"
+        return model
+
     def _build_body(self, req: ChatCompletionRequest, system_prompt: str | None, messages: list) -> dict:
         params: dict[str, Any] = {
-            "model": req.model,
+            "model": self._normalize_model(req.model),
             "messages": messages,
             "max_tokens": req.max_tokens or 64000,
             "stream": req.stream,

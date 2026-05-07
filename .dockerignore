@@ -1,8 +1,15 @@
 __pycache__
 *.pyc
 *.pyo
+.pytest_cache/
 .git
 .gitignore
 .venv
 .env
+.env.example
 *.md
+tests/
+docs/
+.dockerignore
+docker-compose.yml
+run.sh
