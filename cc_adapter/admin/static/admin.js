@@ -459,8 +459,12 @@ async function sendPlayground() {
     respArea.classList.remove("streaming");
   } else {
     try {
-      const resp = await api("POST", "/v1/chat/completions", { model, messages, stream: false });
-      const data = await resp.json();
+      const response = await fetch("/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages, stream: false }),
+      });
+      const data = await response.json();
       respArea.textContent = JSON.stringify(data, null, 2);
     } catch (e) {
       respArea.textContent = `Error: ${e.message}`;
