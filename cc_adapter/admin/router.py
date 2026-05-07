@@ -39,6 +39,27 @@ class ConfigUpdate(BaseModel):
     default_model: str | None = None
 
 
+def _normalize_api_keys(value: str | list[str] | None) -> list[str]:
+    if isinstance(value, list):
+        return [key for key in value if key]
+    if isinstance(value, str):
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [key for key in parsed if key]
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return [value]
+    return []
+
+
+def _primary_api_key(value: str | list[str] | None) -> str:
+    keys = _normalize_api_keys(value)
+    return keys[0] if keys else ""
+
+
 async def verify_auth(authorization: str | None = Header(None)):
     cfg = get_config()
     if not cfg or not cfg.admin_password:
@@ -118,7 +139,7 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
         cfg.default_model = new_cfg.default_model
 
         from cc_adapter.admin.state import init
-        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
+        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key))
         init(cfg, new_client)
 
     return {"content": update.content}
@@ -127,9 +148,9 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
 @router.post("/verify-key")
 async def verify_key(_=Depends(verify_auth)):
     cfg = get_config()
-    if not cfg or not cfg.cc_api_key:
+    if not cfg or not _primary_api_key(cfg.cc_api_key):
         return {"valid": False, "message": "No API Key configured"}
-    test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key, timeout=10.0)
+    test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key), timeout=10.0)
     try:
         test_body = {
             "config": {"env": "adapter", "workingDir": "/tmp", "date": "2026-01-01T00:00:00Z", "environment": "production", "structure": [], "isGitRepo": False, "currentBranch": "main", "mainBranch": "main", "gitStatus": "clean", "recentCommits": []},
@@ -204,7 +225,7 @@ def _apply_config_update(update: ConfigUpdate) -> None:
 
     changed_client = False
     if "cc_api_key" in update_dict:
-        cfg.cc_api_key = update_dict["cc_api_key"]
+        cfg.cc_api_key = _normalize_api_keys(update_dict["cc_api_key"])
         changed_client = True
     if "cc_base_url" in update_dict:
         cfg.cc_base_url = update_dict["cc_base_url"]
@@ -219,5 +240,5 @@ def _apply_config_update(update: ConfigUpdate) -> None:
         cfg.default_model = update_dict["default_model"]
 
     if changed_client:
-        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
+        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key))
         init(cfg, new_client)

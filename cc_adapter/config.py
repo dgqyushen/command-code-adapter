@@ -14,7 +14,7 @@ class AppConfig(BaseSettings):
     port: int = 8080
     log_level: str = "INFO"
 
-    cc_api_key: str | list[str] = ""
+    cc_api_key: str | list[str] = []
     cc_base_url: str = "https://api.commandcode.ai"
     admin_password: str = ""
     access_key: str = ""

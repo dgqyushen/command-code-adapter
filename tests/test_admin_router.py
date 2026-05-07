@@ -14,7 +14,7 @@ app.include_router(admin_router)
 def setup_auth():
     cfg = AppConfig()
     cfg.admin_password = "admin123"
-    client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key)
+    client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "")
     admin_state_init(cfg, client)
     set_password("admin123")
 
@@ -56,3 +56,22 @@ async def test_get_config_returns_fields():
     assert "host" in data
     assert "port" in data
     assert "log_level" in data
+
+
+@pytest.mark.asyncio
+async def test_update_config_uses_first_configured_key_for_client(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from cc_adapter.admin.auth import generate_token
+    from cc_adapter.admin.state import get_client, get_config
+
+    my_token = generate_token()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.put(
+            "/admin/api/config",
+            json={"cc_api_key": '["user_one","user_two"]'},
+            headers={"Authorization": f"Bearer {my_token}"},
+        )
+
+    assert resp.status_code == 200
+    assert get_config().cc_api_key == ["user_one", "user_two"]
+    assert get_client().api_key == "user_one"
