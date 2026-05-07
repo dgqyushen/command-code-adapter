@@ -65,3 +65,16 @@ async def test_stream_reasoning_content():
     # text-delta chunk should have content but no reasoning_content
     assert '"content":"Here is my answer"' in chunks[2]
     assert chunks[-1] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_reasoning_content():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "First, I need to"}
+        yield {"type": "reasoning-delta", "text": " break this down"}
+        yield {"type": "text-delta", "text": "Answer: 42"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
+
+    result = await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert result.choices[0].message.reasoning_content == "First, I need to break this down"
+    assert result.choices[0].message.content == "Answer: 42"

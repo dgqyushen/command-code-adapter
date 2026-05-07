@@ -141,6 +141,7 @@ async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None],
     response_id = _generate_id()
     created = _now()
     content_parts: list[str] = []
+    reasoning_parts: list[str] = []
     tool_calls: list[ToolCall] = []
     finish_reason: str | None = None
     usage: Usage | None = None
@@ -151,6 +152,9 @@ async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None],
 
         if event_type == "text-delta":
             content_parts.append(event.get("text", ""))
+
+        elif event_type == "reasoning-delta":
+            reasoning_parts.append(event.get("text", ""))
 
         elif event_type == "tool-call":
             logger.info("CC tool-call event (nonstream): %s", event)
@@ -178,7 +182,8 @@ async def collect_and_translate_nonstream(cc_stream: AsyncGenerator[dict, None],
             finish_reason = "stop"
 
     content = "".join(content_parts) or None
-    message = ChatMessageResponse(content=content, tool_calls=tool_calls or None)
+    reasoning_content = "".join(reasoning_parts) or None
+    message = ChatMessageResponse(content=content, reasoning_content=reasoning_content, tool_calls=tool_calls or None)
     choice = Choice(message=message, finish_reason=finish_reason or "stop")
 
     return ChatCompletionResponse(
