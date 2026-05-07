@@ -22,8 +22,13 @@ poetry run python -m cc_adapter
 ## Docker
 
 ```bash
+# 构建并运行
 docker build -t cc-adapter .
 docker run -p 8080:8080 -e CC_API_KEY=user_your_key_here cc-adapter
+
+# 或使用 docker-compose（推荐）
+# 编辑 .env 文件配置 CC_API_KEY，然后：
+docker compose up -d
 ```
 
 ## 配置
@@ -81,7 +86,8 @@ cc_adapter/
 │   └── command_code.py    #   Command Code API 格式
 ├── translator/            # 请求/响应格式转换
 │   ├── request.py         #   OpenAI → CC
-│   └── response.py        #   CC → OpenAI
+│   ├── response.py        #   CC → OpenAI
+│   └── tool_mapping.py    #   工具参数名双向映射
 ├── client.py              # CC API HTTP 客户端
 ├── errors.py              # 错误处理与状态码映射
 └── admin/                 # Web 管理面板
