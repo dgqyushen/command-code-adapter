@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class FunctionDefinition(BaseModel):
@@ -30,10 +30,21 @@ class ToolCall(BaseModel):
 
 class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
-    content: str | None = None
+    content: str | list[dict[str, Any]] | None = None
     tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
     name: str | None = None
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def coerce_content(cls, v):
+        if isinstance(v, list):
+            parts = []
+            for item in v:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(item.get("text", ""))
+            return "".join(parts)
+        return v
 
 
 class ChatCompletionRequest(BaseModel):
