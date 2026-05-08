@@ -104,3 +104,61 @@ async def test_nonstream_reasoning_content():
     result = await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
     assert result.choices[0].message.reasoning_content == "First, I need to break this down"
     assert result.choices[0].message.content == "Answer: 42"
+
+
+@pytest.mark.asyncio
+async def test_stream_reasoning_off_filters_reasoning():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Let me think"}
+        yield {"type": "text-delta", "text": "Answer"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 3}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time(), reasoning_effort="off"):
+        chunks.append(chunk)
+
+    assert len(chunks) == 3  # text-delta + finish + [DONE]
+    assert '"content":"Answer"' in chunks[0]
+    assert "reasoning_content" not in chunks[0]
+
+
+@pytest.mark.asyncio
+async def test_nonstream_reasoning_off_no_reasoning_content():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "First, I need to"}
+        yield {"type": "reasoning-delta", "text": " break this down"}
+        yield {"type": "text-delta", "text": "Answer: 42"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
+
+    result = await collect_and_translate_nonstream(
+        fake_stream(), "deepseek-v4", time.time(), reasoning_effort="off"
+    )
+    assert result.choices[0].message.reasoning_content is None
+    assert result.choices[0].message.content == "Answer: 42"
+
+
+@pytest.mark.asyncio
+async def test_stream_reasoning_high_passes_through():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Let me think"}
+        yield {"type": "text-delta", "text": "Answer"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 3}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time(), reasoning_effort="high"):
+        chunks.append(chunk)
+
+    assert '"reasoning_content":"Let me think"' in chunks[0]
+
+
+@pytest.mark.asyncio
+async def test_nonstream_reasoning_high_passes_through():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Step by step"}
+        yield {"type": "text-delta", "text": "Answer"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
+
+    result = await collect_and_translate_nonstream(
+        fake_stream(), "deepseek-v4", time.time(), reasoning_effort="high"
+    )
+    assert result.choices[0].message.reasoning_content == "Step by step"

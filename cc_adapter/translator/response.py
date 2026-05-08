@@ -78,6 +78,8 @@ async def translate_stream(
                 yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
             elif event_type == "reasoning-delta":
+                if reasoning_effort == "off":
+                    continue
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
@@ -216,7 +218,7 @@ async def collect_and_translate_nonstream(
             finish_reason = "stop"
 
     content = "".join(content_parts) or None
-    reasoning_content = "".join(reasoning_parts) or None
+    reasoning_content = None if reasoning_effort == "off" else ("".join(reasoning_parts) or None)
     message = ChatMessageResponse(content=content, reasoning_content=reasoning_content, tool_calls=tool_calls or None)
     choice = Choice(message=message, finish_reason=finish_reason or "stop")
 
