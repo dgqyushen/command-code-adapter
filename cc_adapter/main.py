@@ -98,7 +98,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 
     if req.stream:
         return StreamingResponse(
-            translate_stream(cc_stream, req.model, start_time),
+            translate_stream(cc_stream, req.model, start_time, req.reasoning_effort),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -107,7 +107,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
             },
         )
     else:
-        result = await collect_and_translate_nonstream(cc_stream, req.model, start_time)
+        result = await collect_and_translate_nonstream(cc_stream, req.model, start_time, req.reasoning_effort)
         return result
 
 

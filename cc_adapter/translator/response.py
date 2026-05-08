@@ -56,7 +56,7 @@ def _make_tool_call(cc_event: dict, index: int = 0, include_index: bool = False)
 
 
 async def translate_stream(
-    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float
+    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float, reasoning_effort: str | None = None
 ) -> AsyncGenerator[str, None]:
     """Translate CC SSE events into OpenAI SSE chunks on the fly."""
     response_id = _generate_id()
@@ -158,7 +158,7 @@ async def translate_stream(
 
 
 async def collect_and_translate_nonstream(
-    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float
+    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float, reasoning_effort: str | None = None
 ) -> ChatCompletionResponse:
     """Collect all CC SSE events and build a single ChatCompletionResponse."""
     response_id = _generate_id()
