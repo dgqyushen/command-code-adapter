@@ -17,7 +17,7 @@ from cc_adapter.translator.response import translate_stream, collect_and_transla
 from cc_adapter.errors import AdapterError, AuthenticationError
 from cc_adapter.models.openai import ChatCompletionRequest
 from cc_adapter.admin import router as admin_router
-from cc_adapter.admin.auth import set_password
+from cc_adapter.admin.auth import set_password, validate_token
 from cc_adapter.admin.state import init as admin_init, get_client as get_admin_client
 
 logger = logging.getLogger(__name__)
@@ -65,8 +65,12 @@ async def health():
 async def chat_completions(req: ChatCompletionRequest, request: Request):
     if config.access_key:
         auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer ") or auth[7:] != config.access_key:
-            return JSONResponse(
+        token = auth[7:] if auth.startswith("Bearer ") else ""
+        if token != config.access_key:
+            if config.admin_password and validate_token(token):
+                pass
+            else:
+                return JSONResponse(
                 status_code=401,
                 content={
                     "error": {
