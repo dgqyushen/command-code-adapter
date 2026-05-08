@@ -14,21 +14,17 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 SENSITIVE_TOOL_FIELDS = {"oldString", "newString", "filePath", "old_str", "new_str", "path"}
 
 
-def filter_sensitive_data(_logger: logging.Logger, _method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
-    for key in list(event_dict.keys()):
-        if key in SENSITIVE_TOOL_FIELDS:
-            event_dict[key] = "***"
-        elif isinstance(event_dict[key], dict):
-            _redact_sensitive_keys(event_dict[key])
-    return event_dict
-
-
 def _redact_sensitive_keys(d: dict[str, Any]) -> None:
     for k, v in list(d.items()):
         if k in SENSITIVE_TOOL_FIELDS:
             d[k] = "***"
         elif isinstance(v, dict):
             _redact_sensitive_keys(v)
+
+
+def filter_sensitive_data(_logger: logging.Logger, _method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    _redact_sensitive_keys(event_dict)
+    return event_dict
 
 
 _shared_processors: list[Any] = [

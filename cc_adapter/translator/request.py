@@ -7,6 +7,8 @@ from typing import Any
 
 from cc_adapter.models.openai import ChatCompletionRequest
 from cc_adapter.translator.tool_mapping import normalize_input_args, normalize_schema
+from cc_adapter._utils import is_deepseek_v4_model
+from cc_adapter.headers import make_cc_headers
 
 logger = logging.getLogger(__name__)
 
@@ -83,15 +85,7 @@ def make_cc_body(config: dict[str, Any], params: dict[str, Any]) -> dict[str, An
     return {**_CC_BODY_SKELETON, "config": config, "params": params}
 
 
-def make_cc_headers() -> dict[str, str]:
-    return {
-        "Content-Type": "application/json",
-        "x-cli-environment": "production",
-        "x-project-slug": "adapter",
-        "x-internal-team-flag": "false",
-        "x-taste-learning": "false",
-        "x-command-code-version": "0.25.2-adapter",
-    }
+
 
 
 class RequestTranslator:
@@ -191,10 +185,7 @@ class RequestTranslator:
             return f"{prefix}/{model}"
         return model
 
-    @staticmethod
-    def _is_deepseek_v4(model: str) -> bool:
-        bare = model.split("/")[-1]
-        return bare.startswith("deepseek-v4")
+
 
     def _build_body(self, req: ChatCompletionRequest, system_prompt: str | None, messages: list) -> dict:
         params: dict[str, Any] = {
@@ -209,7 +200,7 @@ class RequestTranslator:
             params["temperature"] = req.temperature
         if req.reasoning_effort is not None:
             effort = req.reasoning_effort
-            if self._is_deepseek_v4(req.model) and effort in ("xhigh", "max"):
+            if is_deepseek_v4_model(req.model) and effort in ("xhigh", "max"):
                 params["reasoning_effort"] = "max"
                 if system_prompt:
                     params["system"] = f"{REASONING_EFFORT_MAX}{system_prompt}"

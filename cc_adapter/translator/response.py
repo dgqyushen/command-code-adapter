@@ -38,7 +38,7 @@ def _now() -> int:
 def _map_finish_reason(cc_reason: str | None) -> str | None:
     if cc_reason is None:
         return None
-    return FINISH_REASON_MAP.get(cc_reason, "stop")
+    return FINISH_REASON_MAP.get(cc_reason, cc_reason)
 
 
 def _parse_usage(raw_usage: dict | None, model: str, start_time: float) -> Usage | None:

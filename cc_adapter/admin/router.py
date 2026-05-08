@@ -14,6 +14,8 @@ from cc_adapter.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.client import CommandCodeClient
 from cc_adapter.translator.request import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX, make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens
+from cc_adapter.headers import make_cc_headers
+from cc_adapter._utils import normalize_api_keys, is_deepseek_v4_model
 
 router = APIRouter(prefix="/admin/api")
 logger = logging.getLogger(__name__)
@@ -38,24 +40,10 @@ class ConfigUpdate(BaseModel):
     default_model: str | None = None
 
 
-def _normalize_api_keys(value: str | list[str] | None) -> list[str]:
-    if isinstance(value, list):
-        return [key for key in value if key]
-    if isinstance(value, str):
-        if not value:
-            return []
-        try:
-            parsed = json.loads(value)
-            if isinstance(parsed, list):
-                return [key for key in parsed if key]
-        except (json.JSONDecodeError, TypeError):
-            pass
-        return [value]
-    return []
-
-
 def _primary_api_key(value: str | list[str] | None) -> str:
-    keys = _normalize_api_keys(value)
+    from cc_adapter._utils import normalize_api_keys
+
+    keys = normalize_api_keys(value)
     return keys[0] if keys else ""
 
 
@@ -67,7 +55,7 @@ def _apply_config_fields(cfg: AppConfig, updates: dict[str, object]) -> bool:
     changed_client = False
     for field, value in updates.items():
         if field == "cc_api_key":
-            value = _normalize_api_keys(value)
+            value = normalize_api_keys(value)
         setattr(cfg, field, value)
         if field in _CONFIG_CLIENT_FIELDS:
             changed_client = True
@@ -218,13 +206,7 @@ async def verify_key(_=Depends(verify_auth)):
                 "stream": True,
             },
         )
-        headers = {
-            "x-command-code-version": "0.25.2-adapter",
-            "x-cli-environment": "production",
-            "x-project-slug": "adapter",
-            "x-internal-team-flag": "false",
-            "x-taste-learning": "false",
-        }
+        headers = make_cc_headers()
         async for _ in test_client.generate(test_body, headers):
             break
         return {"valid": True, "message": "API Key is valid"}
@@ -276,7 +258,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
         for field_name, env_key in field_map.items():
             if key == env_key and field_name in update_map:
                 value = (
-                    _normalize_api_keys(update_map[field_name])
+                    normalize_api_keys(update_map[field_name])
                     if field_name == "cc_api_key"
                     else update_map[field_name]
                 )
@@ -288,7 +270,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
     for field_name, env_key in field_map.items():
         if field_name in update_map and field_name not in existing_keys:
             value = (
-                _normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
+                normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
             )
             if field_name == "cc_api_key":
                 lines.append(f"{env_key}={json.dumps(value)}\n")
@@ -298,9 +280,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
 
 
 def _recreate_client(cfg: AppConfig) -> None:
-    from cc_adapter.admin.state import init
-
-    init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key)))
+    state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key)))
 
 
 def _apply_config_update(update: ConfigUpdate) -> None:

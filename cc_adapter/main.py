@@ -23,20 +23,44 @@ from cc_adapter.admin.auth import set_password, validate_token
 from cc_adapter.admin.state import init as admin_init, get_client as get_admin_client
 
 logger = logging.getLogger(__name__)
-config = AppConfig()
-cc_client = CommandCodeClient(base_url=config.cc_base_url, api_key=config.cc_api_key[0] if config.cc_api_key else "")
-request_translator = RequestTranslator()
+
+_request_translator: RequestTranslator | None = None
+_config: AppConfig | None = None
+_cc_client: CommandCodeClient | None = None
+
+
+def _get_config() -> AppConfig:
+    global _config
+    if _config is None:
+        _config = AppConfig()
+    return _config
+
+
+def _get_client() -> CommandCodeClient:
+    global _cc_client
+    if _cc_client is None:
+        cfg = _get_config()
+        _cc_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "")
+    return _cc_client
+
+
+def _get_translator() -> RequestTranslator:
+    global _request_translator
+    if _request_translator is None:
+        _request_translator = RequestTranslator()
+    return _request_translator
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configure_logging(log_format=config.log_format, log_level=config.log_level)
-    set_password(config.admin_password)
-    logger.info("CC Adapter starting — CC API: %s", config.cc_base_url)
+    cfg = _get_config()
+    configure_logging(log_format=cfg.log_format, log_level=cfg.log_level)
+    set_password(cfg.admin_password)
+    logger.info("CC Adapter starting — CC API: %s", cfg.cc_base_url)
     logger.info(
-        "Admin panel: http://%s:%s/admin/", config.host if config.host != "0.0.0.0" else "localhost", config.port
+        "Admin panel: http://%s:%s/admin/", cfg.host if cfg.host != "0.0.0.0" else "localhost", cfg.port
     )
-    if not config.cc_api_key:
+    if not cfg.cc_api_key:
         logger.warning("CC_ADAPTER_CC_API_KEY is not set. Set it via environment variable or .env file.")
     yield
 
@@ -44,7 +68,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Command Code Adapter", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CorrelationIDMiddleware)
 
-admin_init(config, cc_client)
+admin_init(_get_config(), _get_client())
 app.include_router(admin_router.router)
 
 admin_static = StaticFiles(directory=Path(__file__).parent / "admin" / "static", html=True)
@@ -69,11 +93,12 @@ async def health():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest, request: Request):
-    if config.access_key:
+    cfg = _get_config()
+    if cfg.access_key:
         auth = request.headers.get("Authorization", "")
         token = auth[7:] if auth.startswith("Bearer ") else ""
-        if token != config.access_key:
-            if config.admin_password and validate_token(token):
+        if token != cfg.access_key:
+            if cfg.admin_password and validate_token(token):
                 pass
             else:
                 logger.warning("Authentication failed: invalid access key")
@@ -97,7 +122,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
         req.tool_choice,
     )
 
-    cc_body, cc_headers = request_translator.translate(req)
+    cc_body, cc_headers = _get_translator().translate(req)
     cc_body["params"]["stream"] = True
     tools_available = bool(req.tools) and req.tool_choice != "none"
 
@@ -242,9 +267,10 @@ async def _nonstream_with_retry(
 def run():
     import uvicorn
 
+    cfg = _get_config()
     uvicorn.run(
         "cc_adapter.main:app",
-        host=config.host,
-        port=config.port,
-        log_level=config.log_level.lower(),
+        host=cfg.host,
+        port=cfg.port,
+        log_level=cfg.log_level.lower(),
     )

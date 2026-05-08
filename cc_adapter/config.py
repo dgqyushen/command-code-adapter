@@ -1,7 +1,7 @@
-import json
-
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from cc_adapter._utils import normalize_api_keys
 
 
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
@@ -24,16 +24,4 @@ class AppConfig(BaseSettings):
     @field_validator("cc_api_key", mode="before")
     @classmethod
     def coerce_api_key(cls, v):
-        if isinstance(v, str):
-            if not v:
-                return []
-            try:
-                parsed = json.loads(v)
-                if isinstance(parsed, list):
-                    return parsed
-            except (json.JSONDecodeError, TypeError):
-                pass
-            return [v]
-        if isinstance(v, list):
-            return v
-        return []
+        return normalize_api_keys(v)

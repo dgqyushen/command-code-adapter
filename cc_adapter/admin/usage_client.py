@@ -5,6 +5,8 @@ import logging
 
 import httpx
 
+from cc_adapter.headers import make_cc_headers
+
 logger = logging.getLogger(__name__)
 
 CC_BASE_PATH = "/alpha"
@@ -19,13 +21,7 @@ PLAN_NAMES = {
 
 
 async def query_token_usage(base_url: str, api_key: str, timeout: float = 15.0) -> dict:
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "x-command-code-version": "0.25.2-adapter",
-        "x-cli-environment": "production",
-        "x-project-slug": "adapter",
-    }
+    headers = make_cc_headers(api_key)
 
     result: dict = {"token": api_key, "label": "", "ok": False, "error": None}
 

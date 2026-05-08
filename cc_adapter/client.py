@@ -6,7 +6,8 @@ from typing import AsyncGenerator, Any
 
 import httpx
 
-from cc_adapter.errors import map_upstream_error, AuthenticationError
+from cc_adapter.errors import map_upstream_error, AuthenticationError, TimeoutError_
+from cc_adapter.headers import make_cc_headers
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +47,8 @@ class CommandCodeClient:
         if not self.api_key:
             raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "x-command-code-version": "0.25.2-adapter",
-            "x-cli-environment": "production",
-            "x-project-slug": "adapter",
-            **(extra_headers or {}),
-        }
+        headers = make_cc_headers(self.api_key)
+        headers.update(extra_headers or {})
 
         url = f"{self.base_url}/alpha/generate"
 
@@ -73,8 +68,6 @@ class CommandCodeClient:
 
             except httpx.TimeoutException:
                 logger.warning("CC API request timed out (url=%s)", url)
-                from cc_adapter.errors import TimeoutError_
-
                 raise TimeoutError_("Command Code API request timed out")
             except httpx.HTTPStatusError as e:
                 logger.warning(
