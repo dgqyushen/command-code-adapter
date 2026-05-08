@@ -22,6 +22,15 @@ MODEL_PROVIDER_MAP: dict[str, str] = {
     "step-3-5-flash": "step",
 }
 
+REASONING_EFFORT_MAP: dict[str, str] = {
+    "off": "Respond directly without showing step-by-step reasoning.",
+    "low": "Be concise. Minimize step-by-step reasoning.",
+    "medium": "",
+    "high": "Think step-by-step and show your reasoning process.",
+    "xhigh": "Think carefully step-by-step. Show detailed reasoning.",
+    "max": "Think very thoroughly. Show exhaustive step-by-step reasoning with detailed analysis.",
+}
+
 NOT_SUPPORTED_PARAMS = {
     "top_p": "top_p",
     "stop": "stop",
@@ -118,6 +127,14 @@ class RequestTranslator:
             params["system"] = system_prompt
         if req.temperature is not None:
             params["temperature"] = req.temperature
+        if req.reasoning_effort is not None:
+            params["reasoning_effort"] = req.reasoning_effort
+            instruction = REASONING_EFFORT_MAP.get(req.reasoning_effort, "")
+            if instruction:
+                if system_prompt:
+                    params["system"] = f"{system_prompt}\n{instruction}"
+                else:
+                    params["system"] = instruction
         if req.tools:
             params["tools"] = [
                 {

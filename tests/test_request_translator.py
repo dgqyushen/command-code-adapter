@@ -178,3 +178,72 @@ def test_normalize_default_provider_model_unchanged(translator):
     )
     body, _ = translator.translate(req)
     assert body["params"]["model"] == "claude-sonnet-4-6"
+
+
+def test_reasoning_effort_low_system_prompt(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-flash",
+        messages=[ChatMessage(role="user", content="hello")],
+        reasoning_effort="low",
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["reasoning_effort"] == "low"
+    assert "system" in body["params"]
+    assert "concise" in body["params"]["system"].lower() or "Minimize" in body["params"]["system"]
+
+
+def test_reasoning_effort_medium_no_system_prompt(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-flash",
+        messages=[ChatMessage(role="user", content="hello")],
+        reasoning_effort="medium",
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["reasoning_effort"] == "medium"
+    assert "system" not in body["params"]
+
+
+def test_reasoning_effort_off_injects_suppress_prompt(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-flash",
+        messages=[ChatMessage(role="user", content="hello")],
+        reasoning_effort="off",
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["reasoning_effort"] == "off"
+    assert "system" in body["params"]
+    assert "without showing" in body["params"]["system"]
+
+
+def test_reasoning_effort_appends_to_existing_system(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-flash",
+        messages=[
+            ChatMessage(role="system", content="You are a helpful assistant."),
+            ChatMessage(role="user", content="hello"),
+        ],
+        reasoning_effort="high",
+    )
+    body, _ = translator.translate(req)
+    assert "You are a helpful assistant." in body["params"]["system"]
+    assert "step-by-step" in body["params"]["system"]
+
+
+def test_reasoning_effort_max(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-flash",
+        messages=[ChatMessage(role="user", content="hello")],
+        reasoning_effort="max",
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["reasoning_effort"] == "max"
+    assert "exhaustive" in body["params"]["system"].lower()
+
+
+def test_reasoning_effort_none_not_in_params(translator):
+    req = ChatCompletionRequest(
+        model="deepseek-v4-flash",
+        messages=[ChatMessage(role="user", content="hello")],
+    )
+    body, _ = translator.translate(req)
+    assert "reasoning_effort" not in body["params"]
