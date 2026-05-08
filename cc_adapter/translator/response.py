@@ -16,7 +16,7 @@ from cc_adapter.models.openai import (
     FunctionCall,
     Usage,
 )
-from cc_adapter.errors import AdapterError
+from cc_adapter.errors import AdapterError, map_upstream_error
 from cc_adapter.translator.tool_mapping import normalize_args
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,18 @@ def _parse_usage(raw_usage: dict | None, model: str, start_time: float) -> Usage
     return usage
 
 
+def _stream_error_payload(error: AdapterError) -> dict:
+    return error.to_openai_error()
+
+
+def _event_error(event: dict) -> AdapterError:
+    err_data = event.get("error") or {}
+    message = err_data.get("message") or "Unknown error"
+    status_code = err_data.get("statusCode") or 502
+    logger.error("CC stream error: %s", message)
+    return map_upstream_error(status_code, message)
+
+
 def _make_tool_call(cc_event: dict, index: int = 0, include_index: bool = False) -> ToolCall:
     tool_name = cc_event.get("toolName", "")
     raw_args = cc_event.get("input", cc_event.get("args", {}))
@@ -83,32 +95,41 @@ async def translate_stream(
     created = _now()
     tool_call_index = 0
     usage = None
+    emitted_visible = False  # text-delta or tool-call seen
 
     try:
         async for event in cc_stream:
             event_type = event.get("type")
 
             if event_type == "text-delta":
+                text = event.get("text") or ""
+                if not text:
+                    continue
+                emitted_visible = True
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
                     model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(content=event.get("text", "")))],
+                    choices=[DeltaChoice(delta=ChatMessageResponse(content=text))],
                 )
                 yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
             elif event_type == "reasoning-delta":
                 if reasoning_effort == "off":
                     continue
+                text = event.get("text") or ""
+                if not text:
+                    continue
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
                     model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(reasoning_content=event.get("text", "")))],
+                    choices=[DeltaChoice(delta=ChatMessageResponse(reasoning_content=text))],
                 )
                 yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
             elif event_type == "tool-call":
+                emitted_visible = True
                 logger.info("CC tool-call event: %s", event)
                 tool_call = _make_tool_call(event, tool_call_index, include_index=True)
                 logger.info(
@@ -130,6 +151,10 @@ async def translate_stream(
                 pass  # OpenAI doesn't return tool results in chat completions
 
             elif event_type == "finish":
+                if not emitted_visible:
+                    error = AdapterError(message="Upstream model returned an empty response", status_code=502)
+                    yield f"data: {json.dumps(_stream_error_payload(error))}\n\n"
+                    break
                 finish_reason = "tool_calls" if tool_call_index else _map_finish_reason(event.get("finishReason"))
                 usage = _parse_usage(event.get("totalUsage"), model, start_time)
                 chunk = ChatCompletionChunk(
@@ -142,24 +167,12 @@ async def translate_stream(
                 yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
             elif event_type == "error":
-                err_data = event.get("error", {})
-                logger.error("CC stream error: %s", err_data.get("message", "Unknown"))
-                chunk = ChatCompletionChunk(
-                    id=response_id,
-                    created=created,
-                    model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(), finish_reason="stop")],
-                )
-                yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+                error = _event_error(event)
+                yield f"data: {json.dumps(_stream_error_payload(error))}\n\n"
+                break
     except AdapterError as e:
         logger.error("Stream error from CC API: %s", e.message)
-        error_chunk = ChatCompletionChunk(
-            id=response_id,
-            created=created,
-            model=model,
-            choices=[DeltaChoice(delta=ChatMessageResponse(), finish_reason="stop")],
-        )
-        yield f"data: {error_chunk.model_dump_json(exclude_none=True)}\n\n"
+        yield f"data: {json.dumps(_stream_error_payload(e))}\n\n"
 
     yield "data: [DONE]\n\n"
 
@@ -173,7 +186,7 @@ async def collect_and_translate_nonstream(
     content_parts: list[str] = []
     reasoning_parts: list[str] = []
     tool_calls: list[ToolCall] = []
-    finish_reason: str | None = None
+    finish_reason_raw: str | None = None
     usage: Usage | None = None
     tool_call_index = 0
 
@@ -181,10 +194,10 @@ async def collect_and_translate_nonstream(
         event_type = event.get("type")
 
         if event_type == "text-delta":
-            content_parts.append(event.get("text", ""))
+            content_parts.append(event.get("text") or "")
 
         elif event_type == "reasoning-delta":
-            reasoning_parts.append(event.get("text", ""))
+            reasoning_parts.append(event.get("text") or "")
 
         elif event_type == "tool-call":
             logger.info("CC tool-call event (nonstream): %s", event)
@@ -199,18 +212,28 @@ async def collect_and_translate_nonstream(
             tool_call_index += 1
 
         elif event_type == "finish":
-            finish_reason = _map_finish_reason(event.get("finishReason"))
+            finish_reason_raw = event.get("finishReason")
             usage = _parse_usage(event.get("totalUsage"), model, start_time)
 
         elif event_type == "error":
-            err_data = event.get("error", {})
-            logger.error("CC stream error: %s", err_data.get("message", "Unknown"))
-            finish_reason = "stop"
+            raise _event_error(event)
 
     content = "".join(content_parts) or None
     reasoning_content = None if reasoning_effort == "off" else ("".join(reasoning_parts) or None)
+
+    # Empty response: no visible content AND no tool_calls
+    has_visible_output = bool(content) or bool(tool_calls)
+    if not has_visible_output:
+        raise AdapterError(message="Upstream model returned an empty response", status_code=502)
+
+    # If tool calls were made, finish_reason is always tool_calls
+    if tool_calls:
+        finish_reason = "tool_calls"
+    else:
+        finish_reason = _map_finish_reason(finish_reason_raw) or "stop"
+
     message = ChatMessageResponse(content=content, reasoning_content=reasoning_content, tool_calls=tool_calls or None)
-    choice = Choice(message=message, finish_reason=finish_reason or "stop")
+    choice = Choice(message=message, finish_reason=finish_reason)
 
     return ChatCompletionResponse(
         id=response_id,

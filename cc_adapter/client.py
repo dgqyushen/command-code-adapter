@@ -11,6 +11,29 @@ from cc_adapter.errors import map_upstream_error, AuthenticationError
 logger = logging.getLogger(__name__)
 
 
+def _parse_sse_line(raw: str) -> dict[str, Any] | None:
+    """Parse a single SSE line. Returns None for lines to skip."""
+    line = raw.strip()
+    if not line:
+        return None
+    if line.startswith("data:"):
+        line = line[5:].lstrip()
+    if line == "[DONE]":
+        return None
+    try:
+        parsed = json.loads(line)
+    except ValueError as e:
+        preview = raw[:60]
+        logger.warning("Failed to parse CC event line %r: %s", preview, e)
+        return None
+    if not isinstance(parsed, dict):
+        preview = raw[:60]
+        logger.warning("Failed to parse CC event line %r: not a JSON object", preview)
+        return None
+    logger.debug("CC raw event: type=%s", parsed.get("type", "?"))
+    return parsed
+
+
 class CommandCodeClient:
     def __init__(self, base_url: str, api_key: str, timeout: float = 60.0):
         self.base_url = base_url.rstrip("/")
@@ -43,15 +66,9 @@ class CommandCodeClient:
                         raise map_upstream_error(response.status_code, text)
 
                     async for line in response.aiter_lines():
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            parsed = json.loads(line)
-                            logger.debug("CC raw event: type=%s", parsed.get("type", "?"))
+                        parsed = _parse_sse_line(line)
+                        if parsed is not None:
                             yield parsed
-                        except (ValueError, KeyError) as e:
-                            logger.warning("Failed to parse CC event: %s", e)
 
             except httpx.TimeoutException:
                 from cc_adapter.errors import TimeoutError_

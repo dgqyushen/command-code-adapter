@@ -725,6 +725,8 @@ async function sendChatMessage() {
     const decoder = new TextDecoder();
     let buffer = "";
 
+    let streamEndedWithError = null;
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -733,31 +735,39 @@ async function sendChatMessage() {
       buffer = lines.pop() || "";
 
       for (const line of lines) {
-        if (line.startsWith("data: ") && line !== "data: [DONE]") {
-          try {
-            const json = JSON.parse(line.slice(6));
-            const delta = json.choices?.[0]?.delta || {};
-            const contentDelta = delta.content || "";
-            const reasoningDelta = delta.reasoning_content || "";
+        if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+        try {
+          const data = JSON.parse(line.slice(6));
 
-            if (contentDelta) accumulatedContent += contentDelta;
-            if (reasoningDelta) reasoningContent += reasoningDelta;
+          // SSE error payload (from upstream error or empty response)
+          if (data.error) {
+            streamEndedWithError = data.error;
+            break;
+          }
 
-            let html = "";
-            if (reasoningContent) {
-              html += `<div class="reasoning">${escapeHtml(reasoningContent)}</div>`;
-            }
-            if (accumulatedContent) {
-              html += `<div>${escapeHtml(accumulatedContent)}</div>`;
-            }
-            if (!accumulatedContent && !reasoningContent) {
-              html = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
-            }
-            assistantBubble.innerHTML = html;
-            chatEl.scrollTop = chatEl.scrollHeight;
-          } catch {}
-        }
+          const delta = data.choices?.[0]?.delta || {};
+          const finishReason = data.choices?.[0]?.finish_reason;
+          const contentDelta = delta.content || "";
+          const reasoningDelta = delta.reasoning_content || "";
+
+          if (contentDelta) accumulatedContent += contentDelta;
+          if (reasoningDelta) reasoningContent += reasoningDelta;
+
+          let html = "";
+          if (reasoningContent) {
+            html += `<div class="reasoning">${escapeHtml(reasoningContent)}</div>`;
+          }
+          if (accumulatedContent) {
+            html += `<div>${escapeHtml(accumulatedContent)}</div>`;
+          }
+          if (!accumulatedContent && !reasoningContent && !finishReason) {
+            html = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
+          }
+          assistantBubble.innerHTML = html;
+          chatEl.scrollTop = chatEl.scrollHeight;
+        } catch {}
       }
+      if (streamEndedWithError) break;
     }
   } catch (e) {
     assistantBubble.innerHTML = `<div class="error">Network error: ${escapeHtml(e.message)}</div>`;
@@ -765,6 +775,30 @@ async function sendChatMessage() {
     assistantBubble.classList.remove("streaming");
     accumulatedContent = `Network error: ${e.message}`;
     pgMessages.push({ role: "assistant", content: accumulatedContent });
+    pgStreaming = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = t("send");
+    return;
+  }
+
+  // Handle error from SSE stream
+  if (streamEndedWithError) {
+    const errMsg = streamEndedWithError.message || "Upstream model returned an empty response";
+    assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>`;
+    assistantBubble.classList.add("error");
+    assistantBubble.classList.remove("streaming");
+    pgStreaming = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = t("send");
+    return;
+  }
+
+  // Stream ended without content/reasoning and without error: display empty-response error
+  if (!accumulatedContent && !reasoningContent) {
+    const errMsg = "Upstream model returned an empty response";
+    assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>`;
+    assistantBubble.classList.add("error");
+    assistantBubble.classList.remove("streaming");
     pgStreaming = false;
     sendBtn.disabled = false;
     sendBtn.textContent = t("send");

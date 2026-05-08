@@ -1,6 +1,8 @@
+import json
 import time
 
 import pytest
+from cc_adapter.errors import AdapterError
 from cc_adapter.translator.response import collect_and_translate_nonstream, translate_stream
 
 
@@ -130,9 +132,7 @@ async def test_nonstream_reasoning_off_no_reasoning_content():
         yield {"type": "text-delta", "text": "Answer: 42"}
         yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
 
-    result = await collect_and_translate_nonstream(
-        fake_stream(), "deepseek-v4", time.time(), reasoning_effort="off"
-    )
+    result = await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time(), reasoning_effort="off")
     assert result.choices[0].message.reasoning_content is None
     assert result.choices[0].message.content == "Answer: 42"
 
@@ -158,7 +158,224 @@ async def test_nonstream_reasoning_high_passes_through():
         yield {"type": "text-delta", "text": "Answer"}
         yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
 
-    result = await collect_and_translate_nonstream(
-        fake_stream(), "deepseek-v4", time.time(), reasoning_effort="high"
-    )
+    result = await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time(), reasoning_effort="high")
     assert result.choices[0].message.reasoning_content == "Step by step"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_empty_raises_adapter_error():
+    """No visible content and no tool_calls raises AdapterError(502)."""
+
+    async def fake_stream():
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}}
+
+    with pytest.raises(AdapterError) as exc:
+        await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert exc.value.status_code == 502
+    assert exc.value.message == "Upstream model returned an empty response"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_reasoning_only_raises_adapter_error():
+    """reasoning_content without content/tool_calls is still empty."""
+
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Let me think"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}}
+
+    with pytest.raises(AdapterError) as exc:
+        await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert exc.value.status_code == 502
+    assert exc.value.message == "Upstream model returned an empty response"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_error_event_raises_mapped_error():
+    """Upstream error event is not translated to successful stop."""
+
+    async def fake_stream():
+        yield {"type": "error", "error": {"message": "Model overloaded", "statusCode": 503}}
+
+    with pytest.raises(AdapterError) as exc:
+        await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert exc.value.message == "Model overloaded"
+    assert exc.value.status_code == 502
+    assert exc.value.original_status == 503
+
+
+@pytest.mark.asyncio
+async def test_nonstream_error_event_without_status_uses_502():
+    async def fake_stream():
+        yield {"type": "error", "error": {"message": "Unknown upstream failure", "statusCode": None}}
+
+    with pytest.raises(AdapterError) as exc:
+        await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert exc.value.status_code == 502
+    assert exc.value.message == "Unknown upstream failure"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_tool_calls_with_end_turn_finish_reason():
+    """Non-streaming tool-only response gets tool_calls finish_reason even when upstream says end_turn."""
+
+    async def fake_stream():
+        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/x"}}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
+
+    result = await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert len(result.choices[0].message.tool_calls) == 1
+    assert result.choices[0].finish_reason == "tool_calls"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_reasoning_off_empty_still_raises():
+    """reasoning_effort=off filters reasoning, leaving nothing, so it still raises."""
+
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Some thinking"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+
+    with pytest.raises(AdapterError) as exc:
+        await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time(), reasoning_effort="off")
+    assert exc.value.status_code == 502
+    assert exc.value.message == "Upstream model returned an empty response"
+
+
+@pytest.mark.asyncio
+async def test_stream_empty_emits_error_payload():
+    """Streaming empty response emits error SSE then [DONE]."""
+
+    async def fake_stream():
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    assert len(chunks) == 2  # error + [DONE]
+    # First chunk should be an error payload
+    assert chunks[0].startswith("data: ")
+    # Parse the payload to check it has an error
+    payload = json.loads(chunks[0][6:])
+    assert "error" in payload
+    assert payload["error"]["message"] == "Upstream model returned an empty response"
+    assert payload["error"]["type"] == "api_error"
+    assert payload["error"]["code"] == 502
+    assert chunks[1] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_stream_empty_text_delta_emits_error_payload():
+    """An empty text-delta does not count as visible output."""
+
+    async def fake_stream():
+        yield {"type": "text-delta", "text": ""}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 0}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    assert len(chunks) == 2
+    payload = json.loads(chunks[0][6:])
+    assert payload["error"]["message"] == "Upstream model returned an empty response"
+    assert chunks[1] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_stream_reasoning_only_emits_error():
+    """Streaming reasoning-only (no text, no tool_calls) emits error after reasoning chunk."""
+
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "I am thinking"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 0}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    # reasoning-delta is emitted first, then error replaces finish, then [DONE]
+    assert len(chunks) == 3
+    assert '"reasoning_content":"I am thinking"' in chunks[0]
+    payload = json.loads(chunks[1][6:])
+    assert "error" in payload
+    assert chunks[2] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_stream_error_event_emits_error_payload():
+    """Upstream 'error' event emits error SSE payload, not finish."""
+
+    async def fake_stream():
+        yield {"type": "error", "error": {"message": "Server error", "statusCode": 503}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    assert len(chunks) == 2
+    payload = json.loads(chunks[0][6:])
+    assert "error" in payload
+    assert payload["error"]["message"] == "Server error"
+    assert chunks[1] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_stream_error_event_without_status_uses_502():
+    async def fake_stream():
+        yield {"type": "error", "error": {"message": "Unknown upstream failure", "statusCode": None}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    payload = json.loads(chunks[0][6:])
+    assert payload["error"]["message"] == "Unknown upstream failure"
+    assert payload["error"]["code"] == 502
+
+
+@pytest.mark.asyncio
+async def test_stream_reasoning_off_empty_emits_error():
+    """Streaming with reasoning_effort=off where only reasoning_deltas exist emits error."""
+
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Thinking..."}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 0}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time(), reasoning_effort="off"):
+        chunks.append(chunk)
+
+    assert len(chunks) == 2
+    payload = json.loads(chunks[0][6:])
+    assert "error" in payload
+
+
+@pytest.mark.asyncio
+async def test_nonstream_tool_calls_with_content_no_empty_error():
+    """Tool-call + content is not empty."""
+
+    async def fake_stream():
+        yield {"type": "text-delta", "text": "Here you go"}
+        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/x"}}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 5, "outputTokens": 2}}
+
+    result = await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert result.choices[0].message.content == "Here you go"
+    assert len(result.choices[0].message.tool_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_contentful_response_not_empty():
+    """Regular streaming response with content is not impacted."""
+
+    async def fake_stream():
+        yield {"type": "text-delta", "text": "Hello"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
+        chunks.append(chunk)
+
+    assert len(chunks) == 3  # text + finish + [DONE]
+    assert '"content":"Hello"' in chunks[0]
