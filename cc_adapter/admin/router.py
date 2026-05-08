@@ -197,7 +197,7 @@ async def verify_key(_=Depends(verify_auth)):
                 "model": cfg.default_model,
                 "messages": [{"role": "user", "content": "ping"}],
                 "max_tokens": 10,
-                "stream": False,
+                "stream": True,
             },
         )
         headers = {
