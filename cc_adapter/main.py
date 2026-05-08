@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -102,7 +103,10 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 
     if req.stream:
         return StreamingResponse(
-            translate_stream(cc_stream, req.model, start_time, req.reasoning_effort),
+            _stream_with_retry(
+                lambda: current_client.generate(cc_body, cc_headers),
+                req.model, start_time, req.reasoning_effort,
+            ),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -111,8 +115,48 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
             },
         )
     else:
-        result = await collect_and_translate_nonstream(cc_stream, req.model, start_time, req.reasoning_effort)
-        return result
+        return await _nonstream_with_retry(
+            lambda: current_client.generate(cc_body, cc_headers),
+            req.model, start_time, req.reasoning_effort,
+        )
+
+
+def _is_empty_error(chunk: str) -> bool:
+    try:
+        data = json.loads(chunk.removeprefix("data: "))
+        return data.get("error", {}).get("message") == "Upstream model returned an empty response"
+    except Exception:
+        return False
+
+
+async def _stream_with_retry(
+    generate_fn, model: str, start_time: float, reasoning_effort: str | None = None,
+):
+    for attempt in range(2):
+        cc_stream = generate_fn()
+        translator = translate_stream(cc_stream, model, start_time, reasoning_effort)
+
+        async for chunk in translator:
+            if attempt == 0 and _is_empty_error(chunk):
+                logger.warning("Empty upstream response (attempt 1/2), retrying...")
+                break
+            yield chunk
+        else:
+            return
+
+
+async def _nonstream_with_retry(
+    generate_fn, model: str, start_time: float, reasoning_effort: str | None = None,
+):
+    for attempt in range(2):
+        cc_stream = generate_fn()
+        try:
+            return await collect_and_translate_nonstream(cc_stream, model, start_time, reasoning_effort)
+        except AdapterError as e:
+            if attempt == 0 and "empty response" in e.message.lower():
+                logger.warning("Empty upstream response (attempt 1/2), retrying...")
+                continue
+            raise
 
 
 def run():

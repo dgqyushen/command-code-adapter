@@ -96,6 +96,7 @@ async def translate_stream(
     tool_call_index = 0
     usage = None
     emitted_visible = False  # text-delta or tool-call seen
+    reasoning_buf: list[str] = []  # buffered reasoning for fallback
 
     try:
         async for event in cc_stream:
@@ -120,6 +121,7 @@ async def translate_stream(
                 text = event.get("text") or ""
                 if not text:
                     continue
+                reasoning_buf.append(text)
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
@@ -152,9 +154,20 @@ async def translate_stream(
 
             elif event_type == "finish":
                 if not emitted_visible:
-                    error = AdapterError(message="Upstream model returned an empty response", status_code=502)
-                    yield f"data: {json.dumps(_stream_error_payload(error))}\n\n"
-                    break
+                    if reasoning_buf:
+                        fallback = "".join(reasoning_buf)
+                        chunk = ChatCompletionChunk(
+                            id=response_id,
+                            created=created,
+                            model=model,
+                            choices=[DeltaChoice(delta=ChatMessageResponse(content=fallback))],
+                        )
+                        yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+                        emitted_visible = True
+                    else:
+                        error = AdapterError(message="Upstream model returned an empty response", status_code=502)
+                        yield f"data: {json.dumps(_stream_error_payload(error))}\n\n"
+                        break
                 finish_reason = "tool_calls" if tool_call_index else _map_finish_reason(event.get("finishReason"))
                 usage = _parse_usage(event.get("totalUsage"), model, start_time)
                 chunk = ChatCompletionChunk(
@@ -221,10 +234,14 @@ async def collect_and_translate_nonstream(
     content = "".join(content_parts) or None
     reasoning_content = None if reasoning_effort == "off" else ("".join(reasoning_parts) or None)
 
-    # Empty response: no visible content AND no tool_calls
+    # Empty response: no visible content AND no tool_calls AND no reasoning
     has_visible_output = bool(content) or bool(tool_calls)
     if not has_visible_output:
-        raise AdapterError(message="Upstream model returned an empty response", status_code=502)
+        if reasoning_content:
+            content = reasoning_content
+            reasoning_content = None
+        else:
+            raise AdapterError(message="Upstream model returned an empty response", status_code=502)
 
     # If tool calls were made, finish_reason is always tool_calls
     if tool_calls:

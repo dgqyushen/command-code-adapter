@@ -176,17 +176,16 @@ async def test_nonstream_empty_raises_adapter_error():
 
 
 @pytest.mark.asyncio
-async def test_nonstream_reasoning_only_raises_adapter_error():
-    """reasoning_content without content/tool_calls is still empty."""
+async def test_nonstream_reasoning_only_returns_content():
+    """reasoning_content without content/tool_calls is returned as content."""
 
     async def fake_stream():
         yield {"type": "reasoning-delta", "text": "Let me think"}
         yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}}
 
-    with pytest.raises(AdapterError) as exc:
-        await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
-    assert exc.value.status_code == 502
-    assert exc.value.message == "Upstream model returned an empty response"
+    resp = await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time())
+    assert resp.choices[0].message.content == "Let me think"
+    assert resp.choices[0].message.reasoning_content is None
 
 
 @pytest.mark.asyncio
@@ -283,8 +282,8 @@ async def test_stream_empty_text_delta_emits_error_payload():
 
 
 @pytest.mark.asyncio
-async def test_stream_reasoning_only_emits_error():
-    """Streaming reasoning-only (no text, no tool_calls) emits error after reasoning chunk."""
+async def test_stream_reasoning_only_returns_content():
+    """Streaming reasoning-only (no text, no tool_calls) returns reasoning as content at finish."""
 
     async def fake_stream():
         yield {"type": "reasoning-delta", "text": "I am thinking"}
@@ -294,12 +293,12 @@ async def test_stream_reasoning_only_emits_error():
     async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time()):
         chunks.append(chunk)
 
-    # reasoning-delta is emitted first, then error replaces finish, then [DONE]
-    assert len(chunks) == 3
+    # reasoning-delta → content fallback → finish → [DONE]
+    assert len(chunks) == 4
     assert '"reasoning_content":"I am thinking"' in chunks[0]
-    payload = json.loads(chunks[1][6:])
-    assert "error" in payload
-    assert chunks[2] == "data: [DONE]\n\n"
+    assert '"content":"I am thinking"' in chunks[1]
+    assert '"finish_reason":"stop"' in chunks[2]
+    assert chunks[3] == "data: [DONE]\n\n"
 
 
 @pytest.mark.asyncio
