@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 from typing import Any
 
 from cc_adapter.models.openai import ChatCompletionRequest
-from cc_adapter.translator.tool_mapping import normalize_schema
+from cc_adapter.translator.tool_mapping import normalize_input_args, normalize_schema
 
 logger = logging.getLogger(__name__)
 
@@ -128,31 +129,54 @@ class RequestTranslator:
     def _wrap_content(content: str | None) -> list[dict[str, Any]]:
         return [{"type": "text", "text": content or ""}]
 
+    @staticmethod
+    def _parse_tool_arguments(raw: str) -> dict[str, Any]:
+        try:
+            parsed = json.loads(raw or "{}")
+        except ValueError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _tool_call_block(self, tool_call) -> dict[str, Any]:
+        return {
+            "type": "tool-call",
+            "toolCallId": tool_call.id,
+            "toolName": tool_call.function.name,
+            "input": normalize_input_args(self._parse_tool_arguments(tool_call.function.arguments)),
+        }
+
     def _split_messages(self, messages):
         system_prompt = None
         others = []
+        tool_names_by_id: dict[str, str] = {}
         for msg in messages:
             if msg.role == "system":
                 system_prompt = msg.content
             elif msg.role == "tool":
+                tool_call_id = msg.tool_call_id or ""
                 d: dict[str, Any] = {
-                    "role": "user",
-                    "content": self._wrap_content(msg.content),
+                    "role": "tool",
+                    "content": [
+                        {
+                            "type": "tool-result",
+                            "toolCallId": tool_call_id,
+                            "toolName": tool_names_by_id.get(tool_call_id, "unknown"),
+                            "output": {"type": "text", "value": msg.content or ""},
+                        }
+                    ],
                 }
-                if msg.tool_call_id:
-                    d["tool_call_id"] = msg.tool_call_id
                 others.append(d)
             else:
-                d = {"role": msg.role, "content": self._wrap_content(msg.content)}
+                content = []
+                if msg.content:
+                    content.extend(self._wrap_content(msg.content))
                 if msg.tool_calls:
-                    d["tool_calls"] = [
-                        {
-                            "id": tc.id,
-                            "type": tc.type,
-                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                        }
-                        for tc in msg.tool_calls
-                    ]
+                    for tc in msg.tool_calls:
+                        tool_names_by_id[tc.id] = tc.function.name
+                        content.append(self._tool_call_block(tc))
+                if not content:
+                    content = self._wrap_content(msg.content)
+                d = {"role": msg.role, "content": content}
                 if msg.name:
                     d["name"] = msg.name
                 others.append(d)

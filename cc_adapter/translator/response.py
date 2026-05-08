@@ -88,7 +88,11 @@ def _make_tool_call(cc_event: dict, index: int = 0, include_index: bool = False)
 
 
 async def translate_stream(
-    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float, reasoning_effort: str | None = None
+    cc_stream: AsyncGenerator[dict, None],
+    model: str,
+    start_time: float,
+    reasoning_effort: str | None = None,
+    tools_available: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Translate CC SSE events into OpenAI SSE chunks on the fly."""
     response_id = _generate_id()
@@ -132,13 +136,12 @@ async def translate_stream(
 
             elif event_type == "tool-call":
                 emitted_visible = True
-                logger.info("CC tool-call event: %s", event)
+                logger.debug("CC tool-call event: %s", event)
                 tool_call = _make_tool_call(event, tool_call_index, include_index=True)
                 logger.info(
-                    "Translated tool-call: id=%s name=%s args=%s",
+                    "Translated tool-call: id=%s name=%s",
                     tool_call.id,
                     tool_call.function.name,
-                    tool_call.function.arguments,
                 )
                 chunk = ChatCompletionChunk(
                     id=response_id,
@@ -154,7 +157,7 @@ async def translate_stream(
 
             elif event_type == "finish":
                 if not emitted_visible:
-                    if reasoning_buf:
+                    if reasoning_buf and not tools_available:
                         fallback = "".join(reasoning_buf)
                         chunk = ChatCompletionChunk(
                             id=response_id,
@@ -191,7 +194,11 @@ async def translate_stream(
 
 
 async def collect_and_translate_nonstream(
-    cc_stream: AsyncGenerator[dict, None], model: str, start_time: float, reasoning_effort: str | None = None
+    cc_stream: AsyncGenerator[dict, None],
+    model: str,
+    start_time: float,
+    reasoning_effort: str | None = None,
+    tools_available: bool = False,
 ) -> ChatCompletionResponse:
     """Collect all CC SSE events and build a single ChatCompletionResponse."""
     response_id = _generate_id()
@@ -213,13 +220,12 @@ async def collect_and_translate_nonstream(
             reasoning_parts.append(event.get("text") or "")
 
         elif event_type == "tool-call":
-            logger.info("CC tool-call event (nonstream): %s", event)
+            logger.debug("CC tool-call event (nonstream): %s", event)
             tc = _make_tool_call(event, tool_call_index)
             logger.info(
-                "Translated tool-call (nonstream): id=%s name=%s args=%s",
+                "Translated tool-call (nonstream): id=%s name=%s",
                 tc.id,
                 tc.function.name,
-                tc.function.arguments,
             )
             tool_calls.append(tc)
             tool_call_index += 1
@@ -237,7 +243,7 @@ async def collect_and_translate_nonstream(
     # Empty response: no visible content AND no tool_calls AND no reasoning
     has_visible_output = bool(content) or bool(tool_calls)
     if not has_visible_output:
-        if reasoning_content:
+        if reasoning_content and not tools_available:
             content = reasoning_content
             reasoning_content = None
         else:

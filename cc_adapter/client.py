@@ -63,6 +63,7 @@ class CommandCodeClient:
                     if response.is_error:
                         error_body = await response.aread()
                         text = error_body.decode() if error_body else response.reason_phrase or "Unknown error"
+                        logger.warning("CC API error: status=%d body=%s", response.status_code, text[:500])
                         raise map_upstream_error(response.status_code, text)
 
                     async for line in response.aiter_lines():
@@ -71,8 +72,14 @@ class CommandCodeClient:
                             yield parsed
 
             except httpx.TimeoutException:
+                logger.warning("CC API request timed out (url=%s)", url)
                 from cc_adapter.errors import TimeoutError_
 
                 raise TimeoutError_("Command Code API request timed out")
             except httpx.HTTPStatusError as e:
+                logger.warning(
+                    "CC API HTTP error: status=%d url=%s",
+                    e.response.status_code,
+                    url,
+                )
                 raise map_upstream_error(e.response.status_code, str(e))

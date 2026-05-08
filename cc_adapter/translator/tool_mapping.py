@@ -46,3 +46,9 @@ def normalize_args(tool_name: str, args: dict) -> dict:
         k = ARGS_STR_MAP.get(k, k)
         result[k] = v
     return result
+
+
+def normalize_input_args(args: dict) -> dict:
+    if not isinstance(args, dict):
+        return args
+    return {SCHEMA_PARAM_MAP.get(k, k): v for k, v in args.items()}

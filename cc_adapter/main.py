@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from cc_adapter.config import AppConfig
 from cc_adapter.client import CommandCodeClient
+from cc_adapter.logging import configure_logging, CorrelationIDMiddleware
 from cc_adapter.translator.request import RequestTranslator
 from cc_adapter.translator.response import translate_stream, collect_and_translate_nonstream
 from cc_adapter.errors import AdapterError, AuthenticationError
@@ -29,10 +30,7 @@ request_translator = RequestTranslator()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log_level = getattr(logging, config.log_level.upper(), logging.INFO)
-    logging.getLogger().setLevel(log_level)
-    if not logging.getLogger().hasHandlers():
-        logging.basicConfig(level=log_level, force=True)
+    configure_logging(log_format=config.log_format, log_level=config.log_level)
     set_password(config.admin_password)
     logger.info("CC Adapter starting — CC API: %s", config.cc_base_url)
     logger.info(
@@ -44,6 +42,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Command Code Adapter", version="0.1.0", lifespan=lifespan)
+app.add_middleware(CorrelationIDMiddleware)
 
 admin_init(config, cc_client)
 app.include_router(admin_router.router)
@@ -54,6 +53,7 @@ app.mount("/admin", admin_static, name="admin_static")
 
 @app.exception_handler(AdapterError)
 async def adapter_error_handler(request: Request, exc: AdapterError):
+    logger.error("AdapterError: %s (status=%d)", exc.message, exc.status_code)
     return JSONResponse(status_code=exc.status_code, content=exc.to_openai_error())
 
 
@@ -71,6 +71,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
             if config.admin_password and validate_token(token):
                 pass
             else:
+                logger.warning("Authentication failed: invalid access key")
                 return JSONResponse(
                     status_code=401,
                     content={
@@ -83,15 +84,17 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
                 )
 
     logger.info(
-        "Request: model=%s stream=%s messages=%d tools=%s",
+        "Request: model=%s stream=%s messages=%d tools=%s tool_choice=%s",
         req.model,
         req.stream,
         len(req.messages),
         "yes" if req.tools else "no",
+        req.tool_choice,
     )
 
     cc_body, cc_headers = request_translator.translate(req)
     cc_body["params"]["stream"] = True
+    tools_available = bool(req.tools) and req.tool_choice != "none"
 
     start_time = time.time()
 
@@ -99,13 +102,14 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     if not current_client.api_key:
         raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
 
-    cc_stream = current_client.generate(cc_body, cc_headers)
-
     if req.stream:
         return StreamingResponse(
             _stream_with_retry(
                 lambda: current_client.generate(cc_body, cc_headers),
-                req.model, start_time, req.reasoning_effort,
+                req.model,
+                start_time,
+                req.reasoning_effort,
+                tools_available,
             ),
             media_type="text/event-stream",
             headers={
@@ -117,41 +121,95 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     else:
         return await _nonstream_with_retry(
             lambda: current_client.generate(cc_body, cc_headers),
-            req.model, start_time, req.reasoning_effort,
+            req.model,
+            start_time,
+            req.reasoning_effort,
+            tools_available,
         )
 
 
 def _is_empty_error(chunk: str) -> bool:
+    data = _chunk_payload(chunk)
+    return bool(data and data.get("error", {}).get("message") == "Upstream model returned an empty response")
+
+
+def _chunk_payload(chunk: str) -> dict | None:
     try:
-        data = json.loads(chunk.removeprefix("data: "))
-        return data.get("error", {}).get("message") == "Upstream model returned an empty response"
+        payload = chunk.removeprefix("data: ").strip()
+        if payload == "[DONE]":
+            return None
+        data = json.loads(payload)
+        return data if isinstance(data, dict) else None
     except Exception:
+        return None
+
+
+def _has_visible_delta(chunk: str) -> bool:
+    data = _chunk_payload(chunk)
+    if not data:
         return False
+    for choice in data.get("choices", []):
+        delta = choice.get("delta") or {}
+        if delta.get("content") or delta.get("tool_calls"):
+            return True
+    return False
 
 
 async def _stream_with_retry(
-    generate_fn, model: str, start_time: float, reasoning_effort: str | None = None,
+    generate_fn,
+    model: str,
+    start_time: float,
+    reasoning_effort: str | None = None,
+    tools_available: bool = False,
 ):
     for attempt in range(2):
         cc_stream = generate_fn()
-        translator = translate_stream(cc_stream, model, start_time, reasoning_effort)
+        translator = translate_stream(cc_stream, model, start_time, reasoning_effort, tools_available)
+        buffer_until_visible = attempt == 0 and tools_available
+        buffered_chunks: list[str] = []
+        flushed_chunks = False
+        should_retry = False
 
         async for chunk in translator:
-            if attempt == 0 and _is_empty_error(chunk):
+            if attempt == 0 and not flushed_chunks and _is_empty_error(chunk):
                 logger.warning("Empty upstream response (attempt 1/2), retrying...")
+                await translator.aclose()
+                should_retry = True
                 break
+
+            if buffer_until_visible:
+                buffered_chunks.append(chunk)
+                if _has_visible_delta(chunk):
+                    for buffered_chunk in buffered_chunks:
+                        yield buffered_chunk
+                        flushed_chunks = True
+                    buffered_chunks.clear()
+                    buffer_until_visible = False
+                continue
+
             yield chunk
+            flushed_chunks = True
         else:
+            for buffered_chunk in buffered_chunks:
+                yield buffered_chunk
+                flushed_chunks = True
             return
+
+        if should_retry:
+            continue
 
 
 async def _nonstream_with_retry(
-    generate_fn, model: str, start_time: float, reasoning_effort: str | None = None,
+    generate_fn,
+    model: str,
+    start_time: float,
+    reasoning_effort: str | None = None,
+    tools_available: bool = False,
 ):
     for attempt in range(2):
         cc_stream = generate_fn()
         try:
-            return await collect_and_translate_nonstream(cc_stream, model, start_time, reasoning_effort)
+            return await collect_and_translate_nonstream(cc_stream, model, start_time, reasoning_effort, tools_available)
         except AdapterError as e:
             if attempt == 0 and "empty response" in e.message.lower():
                 logger.warning("Empty upstream response (attempt 1/2), retrying...")

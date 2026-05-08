@@ -80,7 +80,7 @@ def test_tool_translation(translator):
     assert body["params"]["tools"][0]["name"] == "read_file"
 
 
-def test_tool_role_converted_to_user(translator):
+def test_tool_history_converted_to_command_code_blocks(translator):
     req = ChatCompletionRequest(
         model="claude-sonnet-4-6",
         messages=[
@@ -92,7 +92,7 @@ def test_tool_role_converted_to_user(translator):
                     {
                         "id": "call_1",
                         "type": "function",
-                        "function": {"name": "read_file", "arguments": '{"path":"/tmp/test"}'},
+                        "function": {"name": "read", "arguments": '{"filePath":"/tmp/test"}'},
                     }
                 ],
             ),
@@ -104,9 +104,49 @@ def test_tool_role_converted_to_user(translator):
     assert len(msgs) == 3
     assert msgs[0]["role"] == "user"
     assert msgs[1]["role"] == "assistant"
-    assert msgs[2]["role"] == "user"
-    assert msgs[2]["content"] == [{"type": "text", "text": "file contents here"}]
-    assert msgs[2]["tool_call_id"] == "call_1"
+    assert msgs[1]["content"] == [
+        {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/test"}}
+    ]
+    assert msgs[2]["role"] == "tool"
+    assert msgs[2]["content"] == [
+        {
+            "type": "tool-result",
+            "toolCallId": "call_1",
+            "toolName": "read",
+            "output": {"type": "text", "value": "file contents here"},
+        }
+    ]
+
+
+def test_tool_call_arguments_converted_to_command_code_names(translator):
+    req = ChatCompletionRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            ChatMessage(
+                role="assistant",
+                content=None,
+                tool_calls=[
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {
+                            "name": "edit",
+                            "arguments": '{"filePath":"/tmp/test","oldString":"old","newString":"new"}',
+                        },
+                    }
+                ],
+            )
+        ],
+    )
+    body, _ = translator.translate(req)
+    assert body["params"]["messages"][0]["content"] == [
+        {
+            "type": "tool-call",
+            "toolCallId": "call_1",
+            "toolName": "edit",
+            "input": {"path": "/tmp/test", "old_str": "old", "new_str": "new"},
+        }
+    ]
 
 
 def test_content_wrapped_in_array(translator):

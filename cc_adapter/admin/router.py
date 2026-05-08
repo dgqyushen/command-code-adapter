@@ -15,9 +15,8 @@ from cc_adapter.client import CommandCodeClient
 from cc_adapter.translator.request import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX, make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/admin/api")
+logger = logging.getLogger(__name__)
 _start_time = time.time()
 
 
@@ -35,6 +34,7 @@ class ConfigUpdate(BaseModel):
     host: str | None = None
     port: int | None = None
     log_level: str | None = None
+    log_format: str | None = None
     default_model: str | None = None
 
 
@@ -79,9 +79,11 @@ async def verify_auth(authorization: str | None = Header(None)):
     if not cfg or not cfg.admin_password:
         return True
     if not authorization or not authorization.startswith("Bearer "):
+        logger.warning("Admin auth failed: missing or malformed Authorization header")
         raise HTTPException(status_code=401, detail="Unauthorized")
     token = authorization[7:]
     if not validate_token(token):
+        logger.warning("Admin auth failed: invalid token")
         raise HTTPException(status_code=401, detail="Unauthorized")
     return True
 
@@ -92,6 +94,7 @@ async def login(req: LoginRequest):
     if not cfg or not cfg.admin_password:
         return LoginResponse(token="")
     if req.password != cfg.admin_password:
+        logger.warning("Admin login failed: invalid password")
         raise HTTPException(status_code=401, detail="Invalid password")
     token = generate_token()
     return LoginResponse(token=token)

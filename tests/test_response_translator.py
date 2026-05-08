@@ -3,6 +3,7 @@ import time
 
 import pytest
 from cc_adapter.errors import AdapterError
+from cc_adapter.main import _stream_with_retry
 from cc_adapter.translator.response import collect_and_translate_nonstream, translate_stream
 
 
@@ -189,6 +190,20 @@ async def test_nonstream_reasoning_only_returns_content():
 
 
 @pytest.mark.asyncio
+async def test_nonstream_reasoning_only_with_tools_raises_empty_error():
+    """With tools available, thinking-only output should retry instead of ending the agent turn."""
+
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Now I need to read files"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+
+    with pytest.raises(AdapterError) as exc:
+        await collect_and_translate_nonstream(fake_stream(), "deepseek-v4", time.time(), tools_available=True)
+    assert exc.value.status_code == 502
+    assert exc.value.message == "Upstream model returned an empty response"
+
+
+@pytest.mark.asyncio
 async def test_nonstream_error_event_raises_mapped_error():
     """Upstream error event is not translated to successful stop."""
 
@@ -299,6 +314,87 @@ async def test_stream_reasoning_only_returns_content():
     assert '"content":"I am thinking"' in chunks[1]
     assert '"finish_reason":"stop"' in chunks[2]
     assert chunks[3] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_stream_reasoning_only_with_tools_emits_empty_error():
+    """With tools available, reasoning-only streaming output is treated as empty for retry."""
+
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "Now I need to update files"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+
+    chunks = []
+    async for chunk in translate_stream(fake_stream(), "deepseek-v4", time.time(), tools_available=True):
+        chunks.append(chunk)
+
+    assert '"reasoning_content":"Now I need to update files"' in chunks[0]
+    payload = json.loads(chunks[1][6:])
+    assert payload["error"]["message"] == "Upstream model returned an empty response"
+    assert chunks[2] == "data: [DONE]\n\n"
+
+
+@pytest.mark.asyncio
+async def test_stream_with_retry_retries_reasoning_only_tool_turn():
+    """A thinking-only tool turn should automatically retry and surface the second attempt's tool call."""
+
+    attempts = 0
+
+    def generate():
+        nonlocal attempts
+        attempts += 1
+
+        async def fake_stream():
+            if attempts == 1:
+                yield {"type": "reasoning-delta", "text": "Now I need to update files"}
+                yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+            else:
+                yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/x"}}
+                yield {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+
+        return fake_stream()
+
+    chunks = []
+    async for chunk in _stream_with_retry(generate, "deepseek-v4", time.time(), tools_available=True):
+        chunks.append(chunk)
+
+    assert attempts == 2
+    assert any('"tool_calls"' in chunk for chunk in chunks)
+    assert not any('"error"' in chunk for chunk in chunks)
+    assert not any("Now I need to update files" in chunk for chunk in chunks)
+
+
+@pytest.mark.asyncio
+async def test_stream_with_retry_does_not_retry_after_visible_output():
+    """Once visible output has been sent, retrying would mix two attempts in one client stream."""
+
+    attempts = 0
+
+    def generate():
+        nonlocal attempts
+        attempts += 1
+
+        async def fake_stream():
+            if attempts == 1:
+                yield {"type": "text-delta", "text": "Visible output"}
+                yield {
+                    "type": "error",
+                    "error": {"message": "Upstream model returned an empty response", "statusCode": 502},
+                }
+            else:
+                yield {"type": "text-delta", "text": "Second attempt"}
+                yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+
+        return fake_stream()
+
+    chunks = []
+    async for chunk in _stream_with_retry(generate, "deepseek-v4", time.time(), tools_available=True):
+        chunks.append(chunk)
+
+    assert attempts == 1
+    assert any('"content":"Visible output"' in chunk for chunk in chunks)
+    assert any('"error"' in chunk for chunk in chunks)
+    assert not any("Second attempt" in chunk for chunk in chunks)
 
 
 @pytest.mark.asyncio

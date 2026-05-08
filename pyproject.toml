@@ -12,6 +12,7 @@ httpx = "^0.28.0"
 pydantic = "^2.0"
 pydantic-settings = "^2.0"
 uvicorn = { version = "^0.34.0", extras = ["standard"] }
+structlog = "^25.0"
 
 [tool.poetry.scripts]
 cc-adapter = "cc_adapter.main:run"

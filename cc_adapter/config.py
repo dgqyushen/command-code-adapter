@@ -13,6 +13,7 @@ class AppConfig(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8080
     log_level: str = "INFO"
+    log_format: str = "console"
 
     cc_api_key: str | list[str] = []
     cc_base_url: str = "https://api.commandcode.ai"
