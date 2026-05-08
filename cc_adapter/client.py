@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import AsyncGenerator, Any
 
@@ -46,7 +47,7 @@ class CommandCodeClient:
                         if not line:
                             continue
                         try:
-                            parsed = __import__("json").loads(line)
+                            parsed = json.loads(line)
                             logger.debug("CC raw event: type=%s", parsed.get("type", "?"))
                             yield parsed
                         except (ValueError, KeyError) as e:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Any
 
@@ -40,6 +41,46 @@ NOT_SUPPORTED_PARAMS = {
     "user": "user",
     "response_format": "response_format",
 }
+
+_CC_BODY_SKELETON: dict[str, Any] = {
+    "memory": "",
+    "taste": None,
+    "skills": None,
+    "permissionMode": "standard",
+}
+
+
+def _make_config(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = {
+        "env": "adapter",
+        "workingDir": "/home/user/project",
+        "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "environment": "production",
+        "structure": ["src/", "tests/", "docs/"],
+        "isGitRepo": True,
+        "currentBranch": "main",
+        "mainBranch": "main",
+        "gitStatus": "clean",
+        "recentCommits": [],
+    }
+    if overrides:
+        base.update(overrides)
+    return base
+
+
+def make_cc_body(config: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    return {**_CC_BODY_SKELETON, "config": config, "params": params}
+
+
+def make_cc_headers() -> dict[str, str]:
+    return {
+        "Content-Type": "application/json",
+        "x-cli-environment": "production",
+        "x-project-slug": "adapter",
+        "x-internal-team-flag": "false",
+        "x-taste-learning": "false",
+        "x-command-code-version": "0.25.2-adapter",
+    }
 
 
 class RequestTranslator:
@@ -147,34 +188,7 @@ class RequestTranslator:
             tool_choice = self._translate_tool_choice(req.tool_choice)
             if tool_choice is not None:
                 params["tool_choice"] = tool_choice
-        import datetime
-
-        return {
-            "config": {
-                "env": "adapter",
-                "workingDir": "/home/user/project",
-                "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                "environment": "production",
-                "structure": ["src/", "tests/", "docs/"],
-                "isGitRepo": True,
-                "currentBranch": "main",
-                "mainBranch": "main",
-                "gitStatus": "clean",
-                "recentCommits": [],
-            },
-            "memory": "",
-            "taste": None,
-            "skills": None,
-            "permissionMode": "standard",
-            "params": params,
-        }
+        return make_cc_body(config=_make_config(), params=params)
 
     def _build_headers(self) -> dict[str, str]:
-        return {
-            "Content-Type": "application/json",
-            "x-cli-environment": "production",
-            "x-project-slug": "adapter",
-            "x-internal-team-flag": "false",
-            "x-taste-learning": "false",
-            "x-command-code-version": "0.25.2-adapter",
-        }
+        return make_cc_headers()

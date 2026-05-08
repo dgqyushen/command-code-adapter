@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import httpx
@@ -55,8 +56,6 @@ async def query_token_usage(base_url: str, api_key: str, timeout: float = 15.0) 
                     logger.warning("Usage query failed for %s: %s", path, e)
                     return None
 
-            import asyncio
-
             credits_data, sub_data, usage_data = await asyncio.gather(
                 get_json(f"{CC_BASE_PATH}/billing/credits"),
                 get_json(f"{CC_BASE_PATH}/billing/subscriptions"),
@@ -106,6 +105,5 @@ async def query_token_usage(base_url: str, api_key: str, timeout: float = 15.0) 
 
 
 async def query_all_tokens(base_url: str, api_keys: list[str]) -> list[dict]:
-    import asyncio
     tasks = [query_token_usage(base_url, key) for key in api_keys]
     return list(await asyncio.gather(*tasks))

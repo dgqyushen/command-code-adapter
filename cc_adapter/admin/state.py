@@ -29,7 +29,4 @@ def get_base_url() -> str:
 
 
 def get_api_keys() -> list[str]:
-    keys = _config.cc_api_key if _config else []
-    if isinstance(keys, str):
-        return [keys] if keys else []
-    return keys
+    return _config.cc_api_key if _config else []

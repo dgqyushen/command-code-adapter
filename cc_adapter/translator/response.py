@@ -41,6 +41,26 @@ def _map_finish_reason(cc_reason: str | None) -> str | None:
     return FINISH_REASON_MAP.get(cc_reason, "stop")
 
 
+def _parse_usage(raw_usage: dict | None, model: str, start_time: float) -> Usage | None:
+    if not raw_usage:
+        return None
+    usage = Usage(
+        prompt_tokens=raw_usage.get("inputTokens", 0),
+        completion_tokens=raw_usage.get("outputTokens", 0),
+        total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
+    )
+    elapsed = time.time() - start_time
+    logger.info(
+        "Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
+        model,
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        usage.total_tokens,
+        elapsed,
+    )
+    return usage
+
+
 def _make_tool_call(cc_event: dict, index: int = 0, include_index: bool = False) -> ToolCall:
     tool_name = cc_event.get("toolName", "")
     raw_args = cc_event.get("input", cc_event.get("args", {}))
@@ -111,22 +131,7 @@ async def translate_stream(
 
             elif event_type == "finish":
                 finish_reason = "tool_calls" if tool_call_index else _map_finish_reason(event.get("finishReason"))
-                raw_usage = event.get("totalUsage")
-                if raw_usage:
-                    usage = Usage(
-                        prompt_tokens=raw_usage.get("inputTokens", 0),
-                        completion_tokens=raw_usage.get("outputTokens", 0),
-                        total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
-                    )
-                    elapsed = time.time() - start_time
-                    logger.info(
-                        "Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
-                        model,
-                        usage.prompt_tokens,
-                        usage.completion_tokens,
-                        usage.total_tokens,
-                        elapsed,
-                    )
+                usage = _parse_usage(event.get("totalUsage"), model, start_time)
                 chunk = ChatCompletionChunk(
                     id=response_id,
                     created=created,
@@ -195,22 +200,7 @@ async def collect_and_translate_nonstream(
 
         elif event_type == "finish":
             finish_reason = _map_finish_reason(event.get("finishReason"))
-            raw_usage = event.get("totalUsage")
-            if raw_usage:
-                usage = Usage(
-                    prompt_tokens=raw_usage.get("inputTokens", 0),
-                    completion_tokens=raw_usage.get("outputTokens", 0),
-                    total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
-                )
-                elapsed = time.time() - start_time
-                logger.info(
-                    "Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
-                    model,
-                    usage.prompt_tokens,
-                    usage.completion_tokens,
-                    usage.total_tokens,
-                    elapsed,
-                )
+            usage = _parse_usage(event.get("totalUsage"), model, start_time)
 
         elif event_type == "error":
             err_data = event.get("error", {})

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
 import time
-import re
 import logging
 from pathlib import Path
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 
@@ -15,7 +12,7 @@ from cc_adapter.admin.auth import generate_token, validate_token
 from cc_adapter.admin.state import get_config, get_client, init as state_init
 from cc_adapter.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.client import CommandCodeClient
-from cc_adapter.translator.request import MODEL_PROVIDER_MAP
+from cc_adapter.translator.request import MODEL_PROVIDER_MAP, make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens
 
 logger = logging.getLogger(__name__)
@@ -60,6 +57,21 @@ def _normalize_api_keys(value: str | list[str] | None) -> list[str]:
 def _primary_api_key(value: str | list[str] | None) -> str:
     keys = _normalize_api_keys(value)
     return keys[0] if keys else ""
+
+
+_CONFIG_FIELDS = {"cc_api_key", "cc_base_url", "host", "port", "log_level", "default_model"}
+_CONFIG_CLIENT_FIELDS = {"cc_api_key", "cc_base_url"}
+
+
+def _apply_config_fields(cfg: AppConfig, updates: dict[str, object]) -> bool:
+    changed_client = False
+    for field, value in updates.items():
+        if field == "cc_api_key":
+            value = _normalize_api_keys(value)
+        setattr(cfg, field, value)
+        if field in _CONFIG_CLIENT_FIELDS:
+            changed_client = True
+    return changed_client
 
 
 async def verify_auth(authorization: str | None = Header(None)):
@@ -162,16 +174,12 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
     cfg = get_config()
     if cfg:
         new_cfg = AppConfig(_env_file=".env")
-        cfg.cc_api_key = new_cfg.cc_api_key
-        cfg.cc_base_url = new_cfg.cc_base_url
-        cfg.host = new_cfg.host
-        cfg.port = new_cfg.port
-        cfg.log_level = new_cfg.log_level
-        cfg.default_model = new_cfg.default_model
-
-        from cc_adapter.admin.state import init
-        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key))
-        init(cfg, new_client)
+        changed_client = _apply_config_fields(cfg, {
+            field: getattr(new_cfg, field)
+            for field in _CONFIG_FIELDS
+        })
+        if changed_client:
+            _recreate_client(cfg)
 
     return {"content": update.content}
 
@@ -183,30 +191,15 @@ async def verify_key(_=Depends(verify_auth)):
         return {"valid": False, "message": "No API Key configured"}
     test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key), timeout=10.0)
     try:
-        test_body = {
-            "config": {
-                "env": "adapter",
-                "workingDir": "/tmp",
-                "date": "2026-01-01T00:00:00Z",
-                "environment": "production",
-                "structure": [],
-                "isGitRepo": False,
-                "currentBranch": "main",
-                "mainBranch": "main",
-                "gitStatus": "clean",
-                "recentCommits": [],
-            },
-            "memory": "",
-            "taste": None,
-            "skills": None,
-            "permissionMode": "standard",
-            "params": {
+        test_body = make_cc_body(
+            config=_make_config({"workingDir": "/tmp", "structure": [], "isGitRepo": False, "date": "2026-01-01T00:00:00Z"}),
+            params={
                 "model": cfg.default_model,
                 "messages": [{"role": "user", "content": "ping"}],
                 "max_tokens": 10,
                 "stream": False,
             },
-        }
+        )
         headers = {
             "x-command-code-version": "0.25.2-adapter",
             "x-cli-environment": "production",
@@ -279,30 +272,17 @@ def _update_env_file(update: ConfigUpdate) -> None:
     env_path.write_text("".join(lines))
 
 
-def _apply_config_update(update: ConfigUpdate) -> None:
+def _recreate_client(cfg: AppConfig) -> None:
     from cc_adapter.admin.state import init
 
+    init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key)))
+
+
+def _apply_config_update(update: ConfigUpdate) -> None:
     update_dict = update.model_dump(exclude_none=True)
     cfg = get_config()
     if cfg is None:
         return
-
-    changed_client = False
-    if "cc_api_key" in update_dict:
-        cfg.cc_api_key = _normalize_api_keys(update_dict["cc_api_key"])
-        changed_client = True
-    if "cc_base_url" in update_dict:
-        cfg.cc_base_url = update_dict["cc_base_url"]
-        changed_client = True
-    if "host" in update_dict:
-        cfg.host = update_dict["host"]
-    if "port" in update_dict:
-        cfg.port = update_dict["port"]
-    if "log_level" in update_dict:
-        cfg.log_level = update_dict["log_level"]
-    if "default_model" in update_dict:
-        cfg.default_model = update_dict["default_model"]
-
+    changed_client = _apply_config_fields(cfg, update_dict)
     if changed_client:
-        new_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key))
-        init(cfg, new_client)
+        _recreate_client(cfg)
