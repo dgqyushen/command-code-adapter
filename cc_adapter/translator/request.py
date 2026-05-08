@@ -9,6 +9,16 @@ from cc_adapter.translator.tool_mapping import normalize_schema
 
 logger = logging.getLogger(__name__)
 
+REASONING_EFFORT_MAX = (
+    "Reasoning Effort: Absolute maximum with no shortcuts permitted.\n"
+    "You MUST be very thorough in your thinking and comprehensively decompose "
+    "the problem to resolve the root cause, rigorously stress-testing your "
+    "logic against all potential paths, edge cases, and adversarial scenarios.\n"
+    "Explicitly write out your entire deliberation process, documenting every "
+    "intermediate step, considered alternative, and rejected hypothesis to "
+    "ensure absolutely no assumption is left unchecked.\n\n"
+)
+
 MODEL_PROVIDER_MAP: dict[str, str] = {
     "deepseek-v4-pro": "deepseek",
     "deepseek-v4-flash": "deepseek",
@@ -157,6 +167,11 @@ class RequestTranslator:
             return f"{prefix}/{model}"
         return model
 
+    @staticmethod
+    def _is_deepseek_v4(model: str) -> bool:
+        bare = model.split("/")[-1]
+        return bare.startswith("deepseek-v4")
+
     def _build_body(self, req: ChatCompletionRequest, system_prompt: str | None, messages: list) -> dict:
         params: dict[str, Any] = {
             "model": self._normalize_model(req.model),
@@ -169,13 +184,21 @@ class RequestTranslator:
         if req.temperature is not None:
             params["temperature"] = req.temperature
         if req.reasoning_effort is not None:
-            params["reasoning_effort"] = req.reasoning_effort
-            instruction = REASONING_EFFORT_MAP.get(req.reasoning_effort, "")
-            if instruction:
+            effort = req.reasoning_effort
+            if self._is_deepseek_v4(req.model) and effort in ("xhigh", "max"):
+                params["reasoning_effort"] = "max"
                 if system_prompt:
-                    params["system"] = f"{system_prompt}\n{instruction}"
+                    params["system"] = f"{REASONING_EFFORT_MAX}{system_prompt}"
                 else:
-                    params["system"] = instruction
+                    params["system"] = REASONING_EFFORT_MAX
+            else:
+                params["reasoning_effort"] = effort
+                instruction = REASONING_EFFORT_MAP.get(effort, "")
+                if instruction:
+                    if system_prompt:
+                        params["system"] = f"{system_prompt}\n{instruction}"
+                    else:
+                        params["system"] = instruction
         if req.tools:
             params["tools"] = [
                 {

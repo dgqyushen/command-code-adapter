@@ -12,7 +12,7 @@ from cc_adapter.admin.auth import generate_token, validate_token
 from cc_adapter.admin.state import get_config, get_client, init as state_init
 from cc_adapter.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.client import CommandCodeClient
-from cc_adapter.translator.request import MODEL_PROVIDER_MAP, make_cc_body, _make_config
+from cc_adapter.translator.request import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX, make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens
 
 logger = logging.getLogger(__name__)
@@ -146,6 +146,19 @@ async def list_models():
             "provider": provider,
         })
     return {"models": models}
+
+
+@router.get("/reasoning-effort")
+async def get_reasoning_effort_config(_=Depends(verify_auth)):
+    return {
+        "max_prompt": REASONING_EFFORT_MAX,
+        "deepseek_v4_models": [k for k in MODEL_PROVIDER_MAP if k.startswith("deepseek-v4")],
+        "description": (
+            "For deepseek-v4 series models, when reasoning_effort is 'xhigh' or 'max', "
+            "the REASONING_EFFORT_MAX prompt is prepended to the system prompt. "
+            "'xhigh' is mapped to 'max'."
+        ),
+    }
 
 
 @router.put("/config")

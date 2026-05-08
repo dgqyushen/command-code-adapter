@@ -518,6 +518,30 @@ async function renderConfig() {
     document.getElementById("cfg-save").onclick = saveConfig;
     document.getElementById("cfg-cancel").onclick = loadConfig;
   }
+
+  // Append reasoning-effort info card
+  try {
+    const reResp = await api("GET", "/admin/api/reasoning-effort");
+    const reData = await reResp.json();
+    const reCard = document.createElement("div");
+    reCard.className = "card";
+    reCard.style.marginTop = "16px";
+    reCard.innerHTML = `
+      <details style="cursor:pointer;">
+        <summary style="font-weight:600;font-size:14px;padding:12px 0;">
+          Reasoning Effort Max Prompt
+        </summary>
+        <div style="margin-top:8px;font-size:13px;color:var(--text-secondary);">
+          <p><strong>Applicable models:</strong> ${reData.deepseek_v4_models.map(function(m) { return '<code>' + escapeHtml(m) + '</code>'; }).join(', ')}</p>
+          <p style="margin-top:8px;">${escapeHtml(reData.description)}</p>
+          <pre style="margin-top:12px;padding:12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;">${escapeHtml(reData.max_prompt)}</pre>
+          <p style="margin-top:8px;font-size:11px;color:var(--text-muted);">Read-only — shown for reference.</p>
+        </div>
+      </details>`;
+    el.appendChild(reCard);
+  } catch (e) {
+    console.error("Failed to load reasoning-effort config:", e);
+  }
 }
 
 async function loadConfig() {
