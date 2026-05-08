@@ -75,6 +75,36 @@ client = OpenAI(
 )
 ```
 
+### Reasoning Effort
+
+适配器支持 `reasoning_effort` 参数，用于控制模型的思考推理强度。
+
+| 值 | 说明 |
+|---|---|
+| `"off"` | 关闭推理输出（system prompt 抑制 + 响应端过滤 `reasoning-delta`） |
+| `"low"` | 最小推理 |
+| `"medium"` | 默认推理强度（不注入 system prompt） |
+| `"high"` | 逐步推理思考 |
+| `"xhigh"` | 详细推理思考 |
+| `"max"` | 最大推理强度 |
+| `null` / 不传 | 原行为，不做任何处理 |
+
+底层实现采用**双通道策略**：
+1. **CC API 透传**：将 `reasoning_effort` 原样传递给 CC API，未来 CC 原生支持后自动生效
+2. **System Prompt 注入**：根据强度级别向请求追加推理指令（`"medium"` 除外）
+3. **响应端过滤**：`"off"` 模式下过滤 CC 返回的 `reasoning-delta` 事件，剥离 `reasoning_content`
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-v4-flash",
+    "messages": [{"role": "user", "content": "Solve 2x+5=13"}],
+    "reasoning_effort": "high",
+    "stream": true
+  }'
+```
+
 ### 运行测试
 
 ```bash
@@ -180,6 +210,36 @@ client = OpenAI(
     base_url="http://localhost:8080/v1",
     api_key="not-needed",
 )
+```
+
+### Reasoning Effort
+
+The adapter supports the `reasoning_effort` parameter to control the model's reasoning/thinking intensity.
+
+| Value | Description |
+|---|---|
+| `"off"` | Suppress reasoning output (system prompt + response-side `reasoning-delta` filtering) |
+| `"low"` | Minimal reasoning |
+| `"medium"` | Default reasoning (no system prompt injection) |
+| `"high"` | Step-by-step reasoning |
+| `"xhigh"` | Detailed reasoning |
+| `"max"` | Maximum reasoning |
+| `null` / not set | Current behavior, no intervention |
+
+The implementation uses a **dual-path strategy**:
+1. **CC API passthrough**: forwards `reasoning_effort` to CC API for future native support
+2. **System prompt injection**: appends reasoning instructions based on the level (except `"medium"`)
+3. **Response filtering**: strips `reasoning-delta` events and `reasoning_content` when set to `"off"`
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-v4-flash",
+    "messages": [{"role": "user", "content": "Solve 2x+5=13"}],
+    "reasoning_effort": "high",
+    "stream": true
+  }'
 ```
 
 ### Running Tests
