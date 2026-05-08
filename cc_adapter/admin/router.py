@@ -107,20 +107,27 @@ async def ui_config():
     }
 
 
+def _format_model_display_name(bare_name: str) -> str:
+    for prefix, replacement in [
+        ("deepseek-v4-", "DeepSeek V4 "),
+        ("kimi-k2-", "Kimi K2 "),
+        ("glm-", "GLM "),
+        ("minimax-m2-", "Minimax M2 "),
+        ("qwen-3-6-", "Qwen 3-6 "),
+        ("step-3-5-", "Step 3-5 "),
+    ]:
+        if bare_name.startswith(prefix):
+            suffix = bare_name[len(prefix) :]
+            suffix = " ".join(word.capitalize() for word in suffix.split("-"))
+            return replacement + suffix
+    return bare_name.replace("-", " ").title()
+
+
 @router.get("/models")
 async def list_models():
     models = []
     for bare_name, provider in MODEL_PROVIDER_MAP.items():
-        display_name = (
-            bare_name.replace("deepseek-v4-", "DeepSeek V4 ")
-            .replace("kimi-k2-", "Kimi K2 ")
-            .replace("glm-", "GLM ")
-            .replace("minimax-m2-", "Minimax M2 ")
-            .replace("qwen-3-6-", "Qwen 3-6 ")
-            .replace("step-3-5-", "Step 3-5 ")
-            .replace("-", " ")
-            .title()
-        )
+        display_name = _format_model_display_name(bare_name)
         models.append({
             "id": f"{provider}/{bare_name}",
             "name": display_name,
