@@ -25,7 +25,7 @@ async def test_nonstream_unsupported_params_logged(client):
         "top_p": 0.9,
         "stream": False,
     }
-    # This will likely return 502 because CC_API_KEY is not set in test,
+    # This will likely return 502 because CC_ADAPTER_CC_API_KEY is not set in test,
     # but it should NOT crash — it should go through the translator
     response = await client.post("/v1/chat/completions", json=payload)
     assert response.status_code in (200, 401, 502)

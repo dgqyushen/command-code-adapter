@@ -12,7 +12,7 @@ docker compose up -d                                    # start container
 
 ## Config quirk
 
-Code uses `pydantic-settings` with env prefix `CC_ADAPTER_`. The env var for API key is `CC_ADAPTER_CC_API_KEY` (not `CC_API_KEY` as `.env.example` and README suggest). The `.env` file at repo root has the correct names.
+Code uses `pydantic-settings` with env prefix `CC_ADAPTER_`. The env var for API key is `CC_ADAPTER_CC_API_KEY`, and the env var for the CC API base URL is `CC_ADAPTER_CC_BASE_URL`.
 
 All config fields in `cc_adapter/config.py:AppConfig`. Keys support JSON array format: `CC_ADAPTER_CC_API_KEY=["key1","key2"]`.
 

@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
         "Admin panel: http://%s:%s/admin/", config.host if config.host != "0.0.0.0" else "localhost", config.port
     )
     if not config.cc_api_key:
-        logger.warning("CC_API_KEY is not set. Set it via environment variable or .env file.")
+        logger.warning("CC_ADAPTER_CC_API_KEY is not set. Set it via environment variable or .env file.")
     yield
 
 
@@ -71,15 +71,15 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
                 pass
             else:
                 return JSONResponse(
-                status_code=401,
-                content={
-                    "error": {
-                        "message": "Invalid API key",
-                        "type": "invalid_request_error",
-                        "code": "invalid_api_key",
-                    }
-                },
-            )
+                    status_code=401,
+                    content={
+                        "error": {
+                            "message": "Invalid API key",
+                            "type": "invalid_request_error",
+                            "code": "invalid_api_key",
+                        }
+                    },
+                )
 
     logger.info(
         "Request: model=%s stream=%s messages=%d tools=%s",
@@ -96,7 +96,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 
     current_client = get_admin_client() or cc_client
     if not current_client.api_key:
-        raise AuthenticationError("CC_API_KEY is not configured")
+        raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
 
     cc_stream = current_client.generate(cc_body, cc_headers)
 

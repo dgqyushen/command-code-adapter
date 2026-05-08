@@ -463,11 +463,11 @@ async function renderConfig() {
     <div id="cfg-form-view" class="${configRawMode ? 'hidden' : ''}">
       <div class="card">
         <div class="form-group">
-          <label>CC_API_KEY</label>
+          <label>CC_ADAPTER_CC_API_KEY</label>
           <input type="password" id="cfg-key" autocomplete="new-password">
         </div>
         <div class="form-group">
-          <label>CC_BASE_URL</label>
+          <label>CC_ADAPTER_CC_BASE_URL</label>
           <input type="text" id="cfg-base-url">
         </div>
         <div class="form-group">

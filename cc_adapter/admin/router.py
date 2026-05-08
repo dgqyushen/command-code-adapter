@@ -140,11 +140,13 @@ async def list_models():
     models = []
     for bare_name, provider in MODEL_PROVIDER_MAP.items():
         display_name = _format_model_display_name(bare_name)
-        models.append({
-            "id": f"{provider}/{bare_name}",
-            "name": display_name,
-            "provider": provider,
-        })
+        models.append(
+            {
+                "id": f"{provider}/{bare_name}",
+                "name": display_name,
+                "provider": provider,
+            }
+        )
     return {"models": models}
 
 
@@ -187,10 +189,7 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
     cfg = get_config()
     if cfg:
         new_cfg = AppConfig(_env_file=".env")
-        changed_client = _apply_config_fields(cfg, {
-            field: getattr(new_cfg, field)
-            for field in _CONFIG_FIELDS
-        })
+        changed_client = _apply_config_fields(cfg, {field: getattr(new_cfg, field) for field in _CONFIG_FIELDS})
         if changed_client:
             _recreate_client(cfg)
 
@@ -205,7 +204,9 @@ async def verify_key(_=Depends(verify_auth)):
     test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key), timeout=10.0)
     try:
         test_body = make_cc_body(
-            config=_make_config({"workingDir": "/tmp", "structure": [], "isGitRepo": False, "date": "2026-01-01T00:00:00Z"}),
+            config=_make_config(
+                {"workingDir": "/tmp", "structure": [], "isGitRepo": False, "date": "2026-01-01T00:00:00Z"}
+            ),
             params={
                 "model": cfg.default_model,
                 "messages": [{"role": "user", "content": "ping"}],
@@ -254,7 +255,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
     lines = env_path.read_text().splitlines(keepends=True)
     field_map = {
         "cc_api_key": "CC_ADAPTER_CC_API_KEY",
-        "cc_base_url": "CC_BASE_URL",
+        "cc_base_url": "CC_ADAPTER_CC_BASE_URL",
         "host": "CC_ADAPTER_HOST",
         "port": "CC_ADAPTER_PORT",
         "log_level": "CC_ADAPTER_LOG_LEVEL",
@@ -269,7 +270,11 @@ def _update_env_file(update: ConfigUpdate) -> None:
         key = stripped.split("=", 1)[0].strip()
         for field_name, env_key in field_map.items():
             if key == env_key and field_name in update_map:
-                value = _normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
+                value = (
+                    _normalize_api_keys(update_map[field_name])
+                    if field_name == "cc_api_key"
+                    else update_map[field_name]
+                )
                 if field_name == "cc_api_key":
                     lines[i] = f"{env_key}={json.dumps(value)}\n"
                 else:
@@ -277,7 +282,9 @@ def _update_env_file(update: ConfigUpdate) -> None:
                 existing_keys.add(field_name)
     for field_name, env_key in field_map.items():
         if field_name in update_map and field_name not in existing_keys:
-            value = _normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
+            value = (
+                _normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
+            )
             if field_name == "cc_api_key":
                 lines.append(f"{env_key}={json.dumps(value)}\n")
             else:

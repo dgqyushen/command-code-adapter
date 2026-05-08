@@ -17,7 +17,7 @@ OpenAI Chat Completions 兼容适配器，将 [Command Code API](https://api.com
 poetry install
 
 # 配置 API Key
-export CC_API_KEY=user_your_key_here
+export CC_ADAPTER_CC_API_KEY=user_your_key_here
 
 # 启动服务
 poetry run python -m cc_adapter
@@ -30,10 +30,10 @@ poetry run python -m cc_adapter
 ```bash
 # 构建并运行
 docker build -t cc-adapter .
-docker run -p 8080:8080 -e CC_API_KEY=user_your_key_here cc-adapter
+docker run -p 8080:8080 -e CC_ADAPTER_CC_API_KEY=user_your_key_here cc-adapter
 
 # 或使用 docker-compose（推荐）
-# 编辑 .env 文件配置 CC_API_KEY，然后：
+# 编辑 .env 文件配置 CC_ADAPTER_CC_API_KEY，然后：
 docker compose up -d
 ```
 
@@ -41,8 +41,8 @@ docker compose up -d
 
 | 环境变量 | 默认值 | 说明 |
 |----------|--------|------|
-| `CC_API_KEY` | — | Command Code API Key（必填） |
-| `CC_BASE_URL` | `https://api.commandcode.ai` | CC API 地址 |
+| `CC_ADAPTER_CC_API_KEY` | — | Command Code API Key（必填） |
+| `CC_ADAPTER_CC_BASE_URL` | `https://api.commandcode.ai` | CC API 地址 |
 | `CC_ADAPTER_HOST` | `0.0.0.0` | 监听地址 |
 | `CC_ADAPTER_PORT` | `8080` | 监听端口 |
 | `CC_ADAPTER_LOG_LEVEL` | `INFO` | 日志级别 |
@@ -154,7 +154,7 @@ Supports **streaming (SSE)** and **non-streaming** responses, with a built-in We
 poetry install
 
 # Configure API Key
-export CC_API_KEY=user_your_key_here
+export CC_ADAPTER_CC_API_KEY=user_your_key_here
 
 # Start the server
 poetry run python -m cc_adapter
@@ -167,10 +167,10 @@ Once started, visit `http://localhost:8080`. The admin panel is at `http://local
 ```bash
 # Build and run
 docker build -t cc-adapter .
-docker run -p 8080:8080 -e CC_API_KEY=user_your_key_here cc-adapter
+docker run -p 8080:8080 -e CC_ADAPTER_CC_API_KEY=user_your_key_here cc-adapter
 
 # Or use docker-compose (recommended)
-# Edit the .env file to set CC_API_KEY, then:
+# Edit the .env file to set CC_ADAPTER_CC_API_KEY, then:
 docker compose up -d
 ```
 
@@ -178,8 +178,8 @@ docker compose up -d
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CC_API_KEY` | — | Command Code API Key (required) |
-| `CC_BASE_URL` | `https://api.commandcode.ai` | CC API base URL |
+| `CC_ADAPTER_CC_API_KEY` | — | Command Code API Key (required) |
+| `CC_ADAPTER_CC_BASE_URL` | `https://api.commandcode.ai` | CC API base URL |
 | `CC_ADAPTER_HOST` | `0.0.0.0` | Listen address |
 | `CC_ADAPTER_PORT` | `8080` | Listen port |
 | `CC_ADAPTER_LOG_LEVEL` | `INFO` | Log level |

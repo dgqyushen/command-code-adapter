@@ -44,7 +44,7 @@ class CommandCodeClient:
         self, body: dict[str, Any], extra_headers: dict[str, str] | None = None
     ) -> AsyncGenerator[dict[str, Any], None]:
         if not self.api_key:
-            raise AuthenticationError("CC_API_KEY is not configured")
+            raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
 
         headers = {
             "Content-Type": "application/json",

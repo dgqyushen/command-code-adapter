@@ -79,6 +79,28 @@ async def test_update_config_uses_first_configured_key_for_client(tmp_path, monk
 
 
 @pytest.mark.asyncio
+async def test_update_config_persists_prefixed_env_keys(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from cc_adapter.admin.auth import generate_token
+
+    my_token = generate_token()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.put(
+            "/admin/api/config",
+            json={"cc_api_key": "user_one", "cc_base_url": "https://example.test"},
+            headers={"Authorization": f"Bearer {my_token}"},
+        )
+
+    assert resp.status_code == 200
+    env_content = (tmp_path / ".env").read_text()
+    env_lines = set(env_content.splitlines())
+    assert 'CC_ADAPTER_CC_API_KEY=["user_one"]' in env_content
+    assert "CC_ADAPTER_CC_BASE_URL=https://example.test" in env_content
+    assert not any(line.startswith("CC_API_KEY=") for line in env_lines)
+    assert not any(line.startswith("CC_BASE_URL=") for line in env_lines)
+
+
+@pytest.mark.asyncio
 async def test_usage_query_returns_empty_when_no_keys():
     from cc_adapter.admin.state import init as admin_state_init, get_config
     from cc_adapter.admin.auth import generate_token
