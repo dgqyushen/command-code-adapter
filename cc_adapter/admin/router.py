@@ -15,6 +15,7 @@ from cc_adapter.admin.auth import generate_token, validate_token
 from cc_adapter.admin.state import get_config, get_client, init as state_init
 from cc_adapter.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.client import CommandCodeClient
+from cc_adapter.translator.request import MODEL_PROVIDER_MAP
 from cc_adapter.admin.usage_client import query_all_tokens
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,28 @@ async def ui_config():
     return {
         "default_model": cfg.default_model if cfg else DEFAULT_MODEL,
     }
+
+
+@router.get("/models")
+async def list_models():
+    models = []
+    for bare_name, provider in MODEL_PROVIDER_MAP.items():
+        display_name = (
+            bare_name.replace("deepseek-v4-", "DeepSeek V4 ")
+            .replace("kimi-k2-", "Kimi K2 ")
+            .replace("glm-", "GLM ")
+            .replace("minimax-m2-", "Minimax M2 ")
+            .replace("qwen-3-6-", "Qwen 3-6 ")
+            .replace("step-3-5-", "Step 3-5 ")
+            .replace("-", " ")
+            .title()
+        )
+        models.append({
+            "id": f"{provider}/{bare_name}",
+            "name": display_name,
+            "provider": provider,
+        })
+    return {"models": models}
 
 
 @router.put("/config")
