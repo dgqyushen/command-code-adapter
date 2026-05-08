@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from cc_adapter.config import AppConfig
@@ -55,6 +55,11 @@ app.mount("/admin", admin_static, name="admin_static")
 async def adapter_error_handler(request: Request, exc: AdapterError):
     logger.error("AdapterError: %s (status=%d)", exc.message, exc.status_code)
     return JSONResponse(status_code=exc.status_code, content=exc.to_openai_error())
+
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/admin/")
 
 
 @app.get("/health")
@@ -155,6 +160,17 @@ def _has_visible_delta(chunk: str) -> bool:
     return False
 
 
+def _has_streamable_delta(chunk: str) -> bool:
+    data = _chunk_payload(chunk)
+    if not data:
+        return False
+    for choice in data.get("choices", []):
+        delta = choice.get("delta") or {}
+        if delta.get("content") or delta.get("reasoning_content") or delta.get("tool_calls"):
+            return True
+    return False
+
+
 async def _stream_with_retry(
     generate_fn,
     model: str,
@@ -169,9 +185,13 @@ async def _stream_with_retry(
         buffered_chunks: list[str] = []
         flushed_chunks = False
         should_retry = False
+        emitted_visible_delta = False
 
         async for chunk in translator:
-            if attempt == 0 and not flushed_chunks and _is_empty_error(chunk):
+            if _has_visible_delta(chunk):
+                emitted_visible_delta = True
+
+            if attempt == 0 and not emitted_visible_delta and _is_empty_error(chunk):
                 logger.warning("Empty upstream response (attempt 1/2), retrying...")
                 await translator.aclose()
                 should_retry = True
@@ -179,7 +199,7 @@ async def _stream_with_retry(
 
             if buffer_until_visible:
                 buffered_chunks.append(chunk)
-                if _has_visible_delta(chunk):
+                if _has_streamable_delta(chunk):
                     for buffered_chunk in buffered_chunks:
                         yield buffered_chunk
                         flushed_chunks = True
@@ -209,7 +229,9 @@ async def _nonstream_with_retry(
     for attempt in range(2):
         cc_stream = generate_fn()
         try:
-            return await collect_and_translate_nonstream(cc_stream, model, start_time, reasoning_effort, tools_available)
+            return await collect_and_translate_nonstream(
+                cc_stream, model, start_time, reasoning_effort, tools_available
+            )
         except AdapterError as e:
             if attempt == 0 and "empty response" in e.message.lower():
                 logger.warning("Empty upstream response (attempt 1/2), retrying...")

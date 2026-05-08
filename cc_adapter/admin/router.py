@@ -59,7 +59,7 @@ def _primary_api_key(value: str | list[str] | None) -> str:
     return keys[0] if keys else ""
 
 
-_CONFIG_FIELDS = {"cc_api_key", "cc_base_url", "host", "port", "log_level", "default_model"}
+_CONFIG_FIELDS = {"cc_api_key", "cc_base_url", "host", "port", "log_level", "log_format", "default_model"}
 _CONFIG_CLIENT_FIELDS = {"cc_api_key", "cc_base_url"}
 
 
@@ -109,6 +109,7 @@ async def get_config_endpoint(_=Depends(verify_auth)):
         "host": cfg.host if cfg else "",
         "port": cfg.port if cfg else 8080,
         "log_level": cfg.log_level if cfg else "INFO",
+        "log_format": cfg.log_format if cfg else "console",
         "admin_password_configured": bool(cfg and cfg.admin_password),
         "default_model": cfg.default_model if cfg else DEFAULT_MODEL,
     }
@@ -262,6 +263,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
         "host": "CC_ADAPTER_HOST",
         "port": "CC_ADAPTER_PORT",
         "log_level": "CC_ADAPTER_LOG_LEVEL",
+        "log_format": "CC_ADAPTER_LOG_FORMAT",
         "default_model": "CC_ADAPTER_DEFAULT_MODEL",
     }
     update_map = update.model_dump(exclude_none=True)

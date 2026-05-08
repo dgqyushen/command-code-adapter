@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 
@@ -336,7 +337,7 @@ async def test_stream_reasoning_only_with_tools_emits_empty_error():
 
 @pytest.mark.asyncio
 async def test_stream_with_retry_retries_reasoning_only_tool_turn():
-    """A thinking-only tool turn should automatically retry and surface the second attempt's tool call."""
+    """A thinking-only tool turn should retry while preserving already-streamed reasoning."""
 
     attempts = 0
 
@@ -347,10 +348,18 @@ async def test_stream_with_retry_retries_reasoning_only_tool_turn():
         async def fake_stream():
             if attempts == 1:
                 yield {"type": "reasoning-delta", "text": "Now I need to update files"}
-                yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+                yield {
+                    "type": "finish",
+                    "finishReason": "end_turn",
+                    "totalUsage": {"inputTokens": 1, "outputTokens": 1},
+                }
             else:
                 yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/x"}}
-                yield {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+                yield {
+                    "type": "finish",
+                    "finishReason": "tool_calls",
+                    "totalUsage": {"inputTokens": 1, "outputTokens": 1},
+                }
 
         return fake_stream()
 
@@ -361,7 +370,40 @@ async def test_stream_with_retry_retries_reasoning_only_tool_turn():
     assert attempts == 2
     assert any('"tool_calls"' in chunk for chunk in chunks)
     assert not any('"error"' in chunk for chunk in chunks)
-    assert not any("Now I need to update files" in chunk for chunk in chunks)
+    assert any("Now I need to update files" in chunk for chunk in chunks)
+
+
+@pytest.mark.asyncio
+async def test_stream_with_retry_streams_reasoning_before_content_with_tools():
+    """Tool-enabled streams should not batch reasoning until content/tool calls appear."""
+
+    content_allowed = asyncio.Event()
+
+    def generate():
+        async def fake_stream():
+            yield {"type": "reasoning-delta", "text": "Thinking first"}
+            await content_allowed.wait()
+            yield {"type": "text-delta", "text": "Visible answer"}
+            yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 2}}
+
+        return fake_stream()
+
+    stream = _stream_with_retry(generate, "deepseek-v4", time.time(), tools_available=True)
+    try:
+        first_chunk = await asyncio.wait_for(anext(stream), timeout=0.05)
+    except TimeoutError:
+        content_allowed.set()
+        await stream.aclose()
+        pytest.fail("reasoning chunk was buffered until content/tool calls appeared")
+
+    assert '"reasoning_content":"Thinking first"' in first_chunk
+
+    content_allowed.set()
+    remaining = []
+    async for chunk in stream:
+        remaining.append(chunk)
+
+    assert any('"content":"Visible answer"' in chunk for chunk in remaining)
 
 
 @pytest.mark.asyncio
@@ -383,7 +425,11 @@ async def test_stream_with_retry_does_not_retry_after_visible_output():
                 }
             else:
                 yield {"type": "text-delta", "text": "Second attempt"}
-                yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 1, "outputTokens": 1}}
+                yield {
+                    "type": "finish",
+                    "finishReason": "end_turn",
+                    "totalUsage": {"inputTokens": 1, "outputTokens": 1},
+                }
 
         return fake_stream()
 

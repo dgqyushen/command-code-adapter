@@ -60,6 +60,7 @@ const i18n = {
     tokenRemove: "删除",
     tokenSave: "保存",
     tokenCancel: "取消",
+    reasoningEffortMax: "启用 Max Prompt（仅 deepseek-v4）",
   },
   en: {
     title: "CC Adapter Admin",
@@ -121,6 +122,7 @@ const i18n = {
     tokenRemove: "Remove",
     tokenSave: "Save",
     tokenCancel: "Cancel",
+    reasoningEffortMax: "Enable Max Prompt (deepseek-v4 only)",
   },
 };
 
@@ -623,6 +625,9 @@ async function renderPlayground() {
     <div class="chat-container">
       <div class="chat-model-bar">
         <select id="pg-model-select">${window._modelSelectHtml}</select>
+        <label class="checkbox-label" id="pg-re-max-label" style="font-size:13px;display:none">
+          <input type="checkbox" id="pg-re-max" checked> ${t("reasoningEffortMax")}
+        </label>
         <button class="btn btn-secondary" id="pg-clear">${t("clear")}</button>
       </div>
       <div class="chat-messages" id="pg-chat"></div>
@@ -634,6 +639,14 @@ async function renderPlayground() {
 
   document.getElementById("pg-send").onclick = sendChatMessage;
   document.getElementById("pg-clear").onclick = clearChat;
+
+  const modelSelect = document.getElementById("pg-model-select");
+  modelSelect.onchange = () => {
+    const model = modelSelect.value;
+    const isDeepseekV4 = model && model.includes("deepseek-v4");
+    document.getElementById("pg-re-max-label").style.display = isDeepseekV4 ? "" : "none";
+  };
+  modelSelect.onchange();
 
   const textarea = document.getElementById("pg-input");
   textarea.oninput = () => {
@@ -700,117 +713,95 @@ async function sendChatMessage() {
   const assistantBubble = appendBubble("assistant", "", true);
   let accumulatedContent = "";
   let reasoningContent = "";
+  let streamEndedWithError = null;
+  let requestError = null;
 
   try {
+    const reMaxEnabled = document.getElementById("pg-re-max")?.checked;
+    const isDeepseekV4 = model && model.includes("deepseek-v4");
+
+    const body = { model, messages: pgMessages, stream: true };
+    if (isDeepseekV4 && reMaxEnabled) {
+      body.reasoning_effort = "max";
+    }
+
     const response = await fetch("/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ model, messages: pgMessages, stream: true }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      const errMsg = (err.error && err.error.message) || `HTTP ${response.status}`;
-      assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>`;
-      assistantBubble.classList.add("error");
-      assistantBubble.classList.remove("streaming");
-      accumulatedContent = errMsg;
-      pgMessages.push({ role: "assistant", content: accumulatedContent });
-      pgStreaming = false;
-      sendBtn.disabled = false;
-      sendBtn.textContent = t("send");
-      return;
-    }
+      requestError = (err.error && err.error.message) || `HTTP ${response.status}`;
+    } else {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-    let streamEndedWithError = null;
+        for (const line of lines) {
+          if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+          try {
+            const data = JSON.parse(line.slice(6));
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+            if (data.error) {
+              streamEndedWithError = data.error;
+              break;
+            }
 
-      for (const line of lines) {
-        if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
-        try {
-          const data = JSON.parse(line.slice(6));
+            const delta = data.choices?.[0]?.delta || {};
+            const finishReason = data.choices?.[0]?.finish_reason;
+            const contentDelta = delta.content || "";
+            const reasoningDelta = delta.reasoning_content || "";
 
-          // SSE error payload (from upstream error or empty response)
-          if (data.error) {
-            streamEndedWithError = data.error;
-            break;
-          }
+            if (contentDelta) accumulatedContent += contentDelta;
+            if (reasoningDelta) reasoningContent += reasoningDelta;
 
-          const delta = data.choices?.[0]?.delta || {};
-          const finishReason = data.choices?.[0]?.finish_reason;
-          const contentDelta = delta.content || "";
-          const reasoningDelta = delta.reasoning_content || "";
-
-          if (contentDelta) accumulatedContent += contentDelta;
-          if (reasoningDelta) reasoningContent += reasoningDelta;
-
-          let html = "";
-          if (reasoningContent) {
-            html += `<div class="reasoning">${escapeHtml(reasoningContent)}</div>`;
-          }
-          if (accumulatedContent) {
-            html += `<div>${escapeHtml(accumulatedContent)}</div>`;
-          }
-          if (!accumulatedContent && !reasoningContent && !finishReason) {
-            html = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
-          }
-          assistantBubble.innerHTML = html;
-          chatEl.scrollTop = chatEl.scrollHeight;
-        } catch {}
+            let html = "";
+            if (reasoningContent) {
+              html += `<div class="reasoning">${escapeHtml(reasoningContent)}</div>`;
+            }
+            if (accumulatedContent) {
+              html += `<div>${escapeHtml(accumulatedContent)}</div>`;
+            }
+            if (!accumulatedContent && !reasoningContent && !finishReason) {
+              html = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
+            }
+            assistantBubble.innerHTML = html;
+            chatEl.scrollTop = chatEl.scrollHeight;
+          } catch {}
+        }
+        if (streamEndedWithError) break;
       }
-      if (streamEndedWithError) break;
     }
   } catch (e) {
-    assistantBubble.innerHTML = `<div class="error">Network error: ${escapeHtml(e.message)}</div>`;
-    assistantBubble.classList.add("error");
-    assistantBubble.classList.remove("streaming");
-    accumulatedContent = `Network error: ${e.message}`;
-    pgMessages.push({ role: "assistant", content: accumulatedContent });
-    pgStreaming = false;
-    sendBtn.disabled = false;
-    sendBtn.textContent = t("send");
-    return;
-  }
-
-  // Handle error from SSE stream
-  if (streamEndedWithError) {
-    const errMsg = streamEndedWithError.message || "Upstream model returned an empty response";
-    assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>`;
-    assistantBubble.classList.add("error");
-    assistantBubble.classList.remove("streaming");
-    pgStreaming = false;
-    sendBtn.disabled = false;
-    sendBtn.textContent = t("send");
-    return;
-  }
-
-  // Stream ended without content/reasoning and without error: display empty-response error
-  if (!accumulatedContent && !reasoningContent) {
-    const errMsg = "Upstream model returned an empty response";
-    assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>`;
-    assistantBubble.classList.add("error");
+    requestError = `Network error: ${e.message}`;
+  } finally {
+    if (requestError) {
+      assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(requestError)}</div>`;
+      assistantBubble.classList.add("error");
+    } else if (streamEndedWithError) {
+      const errMsg = streamEndedWithError.message || "Upstream model returned an empty response";
+      assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>`;
+      assistantBubble.classList.add("error");
+    } else if (!accumulatedContent && !reasoningContent) {
+      assistantBubble.innerHTML = `<div class="error">Error: Upstream model returned an empty response</div>`;
+      assistantBubble.classList.add("error");
+    } else {
+      pgMessages.push({ role: "assistant", content: accumulatedContent, reasoning_content: reasoningContent || undefined });
+    }
     assistantBubble.classList.remove("streaming");
     pgStreaming = false;
     sendBtn.disabled = false;
     sendBtn.textContent = t("send");
-    return;
   }
-
-  pgMessages.push({ role: "assistant", content: accumulatedContent, reasoning_content: reasoningContent || undefined });
-  assistantBubble.classList.remove("streaming");
-  pgStreaming = false;
-  sendBtn.disabled = false;
-  sendBtn.textContent = t("send");
 }
 
 // Init
