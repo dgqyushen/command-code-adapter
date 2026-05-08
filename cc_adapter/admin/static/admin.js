@@ -128,6 +128,8 @@ let lang = localStorage.getItem("cc-admin-lang") || "zh";
 let theme = localStorage.getItem("cc-admin-theme") || "light";
 let token = localStorage.getItem("cc-admin-token") || null;
 let defaultModel = "deepseek/deepseek-v4-flash";
+let pgMessages = [];
+let pgStreaming = false;
 
 function t(key) { return i18n[lang][key] || key; }
 
@@ -571,112 +573,185 @@ async function saveRawConfig() {
   } catch { showToast(t("saveFailed"), "error"); }
 }
 
-// Playground
+// Playground — Chat UI
 async function renderPlayground() {
+  let defaultModelVal = defaultModel;
   try {
-    const resp = await fetch("/admin/api/ui-config");
-    const cfg = await resp.json();
-    if (cfg.default_model) defaultModel = cfg.default_model;
+    const [uiResp, modelsResp] = await Promise.all([
+      fetch("/admin/api/ui-config"),
+      fetch("/admin/api/models"),
+    ]);
+    const uiCfg = await uiResp.json();
+    if (uiCfg.default_model) defaultModelVal = uiCfg.default_model;
+    const modelsData = await modelsResp.json();
+    const modelOptions = modelsData.models
+      .map(m => `<option value="${m.id}"${m.id === defaultModelVal ? " selected" : ""}>${m.name}</option>`)
+      .join("");
+    window._modelSelectHtml = modelOptions;
   } catch {}
+  if (!window._modelSelectHtml) {
+    window._modelSelectHtml = `<option value="${defaultModelVal}">${defaultModelVal}</option>`;
+  }
+
   const el = document.getElementById("tab-playground");
   el.innerHTML = `
-    <h2 data-i18n="playground">${t("playground")}</h2>
-    <div class="card playground-form" style="margin-top:16px">
-      <div class="form-group">
-        <label data-i18n="model">${t("model")}</label>
-        <input type="text" id="pg-model" value="${defaultModel}" placeholder="${defaultModel}">
-      </div>
-      <div class="form-group">
-        <label data-i18n="messages">${t("messages")}</label>
-        <textarea id="pg-messages" placeholder='[{"role":"user","content":"Hello"}]'>[{"role":"user","content":"ping"}]</textarea>
-      </div>
-      <div class="checkbox-row">
-        <input type="checkbox" id="pg-stream" checked>
-        <label for="pg-stream" data-i18n="stream">${t("stream")}</label>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary" id="pg-send">${t("send")}</button>
+    <div class="chat-container">
+      <div class="chat-model-bar">
+        <select id="pg-model-select">${window._modelSelectHtml}</select>
         <button class="btn btn-secondary" id="pg-clear">${t("clear")}</button>
       </div>
-    </div>
-    <div class="response-area" id="pg-response"></div>`;
-  document.getElementById("pg-send").onclick = sendPlayground;
-  document.getElementById("pg-clear").onclick = () => {
-    document.getElementById("pg-response").textContent = "";
+      <div class="chat-messages" id="pg-chat"></div>
+      <div class="chat-input-area">
+        <textarea id="pg-input" placeholder="输入消息..." rows="1">你好，请介绍一下你自己</textarea>
+        <button class="btn btn-primary" id="pg-send">${t("send")}</button>
+      </div>
+    </div>`;
+
+  document.getElementById("pg-send").onclick = sendChatMessage;
+  document.getElementById("pg-clear").onclick = clearChat;
+
+  const textarea = document.getElementById("pg-input");
+  textarea.oninput = () => {
+    textarea.style.height = "auto";
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
   };
+  textarea.onkeydown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  };
+
+  pgMessages = [];
 }
 
-async function sendPlayground() {
-  const model = document.getElementById("pg-model").value || defaultModel;
-  const messagesText = document.getElementById("pg-messages").value;
-  const stream = document.getElementById("pg-stream").checked;
-  let messages;
-  try { messages = JSON.parse(messagesText); }
-  catch { showToast("Invalid JSON in messages", "error"); return; }
+function clearChat() {
+  pgMessages = [];
+  const chatEl = document.getElementById("pg-chat");
+  if (chatEl) chatEl.innerHTML = "";
+}
 
-  const respArea = document.getElementById("pg-response");
-  respArea.textContent = "Sending...";
+function appendBubble(role, text, streaming) {
+  const chatEl = document.getElementById("pg-chat");
+  if (!chatEl) return null;
+  const bubble = document.createElement("div");
+  bubble.className = `chat-bubble ${role}` + (streaming ? " streaming" : "");
+  if (text) {
+    bubble.textContent = text;
+  } else if (streaming) {
+    bubble.innerHTML = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
+  }
+  chatEl.appendChild(bubble);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return bubble;
+}
 
-  if (stream) {
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function sendChatMessage() {
+  if (pgStreaming) return;
+  const input = document.getElementById("pg-input");
+  const text = input.value.trim();
+  if (!text) return;
+
+  const model = document.getElementById("pg-model-select").value;
+  const chatEl = document.getElementById("pg-chat");
+
+  pgMessages.push({ role: "user", content: text });
+  appendBubble("user", text);
+  input.value = "";
+  input.style.height = "auto";
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  pgStreaming = true;
+  const sendBtn = document.getElementById("pg-send");
+  sendBtn.disabled = true;
+  sendBtn.textContent = "...";
+
+  const assistantBubble = appendBubble("assistant", "", true);
+  let accumulatedContent = "";
+  let reasoningContent = "";
+
+  try {
     const response = await fetch("/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, stream: true }),
+      body: JSON.stringify({ model, messages: pgMessages, stream: true }),
     });
+
     if (!response.ok) {
-      const err = await response.json();
-      respArea.textContent = JSON.stringify(err, null, 2);
+      const err = await response.json().catch(() => ({}));
+      const errMsg = (err.error && err.error.message) || `HTTP ${response.status}`;
+      assistantBubble.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>`;
+      assistantBubble.classList.add("error");
+      assistantBubble.classList.remove("streaming");
+      accumulatedContent = errMsg;
+      pgMessages.push({ role: "assistant", content: accumulatedContent });
+      pgStreaming = false;
+      sendBtn.disabled = false;
+      sendBtn.textContent = t("send");
       return;
     }
-    respArea.textContent = "";
-    respArea.classList.add("streaming");
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
+
       for (const line of lines) {
         if (line.startsWith("data: ") && line !== "data: [DONE]") {
           try {
             const json = JSON.parse(line.slice(6));
-            const content = json.choices?.[0]?.delta?.content || "";
-            const reasoning = json.choices?.[0]?.delta?.reasoning_content || "";
-            if (content) {
-              const div = document.createElement("div");
-              div.className = "line";
-              div.textContent = content;
-              respArea.appendChild(div);
-              respArea.scrollTop = respArea.scrollHeight;
+            const delta = json.choices?.[0]?.delta || {};
+            const contentDelta = delta.content || "";
+            const reasoningDelta = delta.reasoning_content || "";
+
+            if (contentDelta) accumulatedContent += contentDelta;
+            if (reasoningDelta) reasoningContent += reasoningDelta;
+
+            let html = "";
+            if (reasoningContent) {
+              html += `<div class="reasoning">${escapeHtml(reasoningContent)}</div>`;
             }
-            if (reasoning) {
-              const div = document.createElement("div");
-              div.className = "line thinking";
-              div.textContent = "🤔 " + reasoning;
-              respArea.appendChild(div);
-              respArea.scrollTop = respArea.scrollHeight;
+            if (accumulatedContent) {
+              html += `<div>${escapeHtml(accumulatedContent)}</div>`;
             }
+            if (!accumulatedContent && !reasoningContent) {
+              html = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
+            }
+            assistantBubble.innerHTML = html;
+            chatEl.scrollTop = chatEl.scrollHeight;
           } catch {}
         }
       }
     }
-    respArea.classList.remove("streaming");
-  } else {
-    try {
-      const response = await fetch("/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages, stream: false }),
-      });
-      const data = await response.json();
-      respArea.textContent = JSON.stringify(data, null, 2);
-    } catch (e) {
-      respArea.textContent = `Error: ${e.message}`;
-    }
+  } catch (e) {
+    assistantBubble.innerHTML = `<div class="error">Network error: ${escapeHtml(e.message)}</div>`;
+    assistantBubble.classList.add("error");
+    assistantBubble.classList.remove("streaming");
+    accumulatedContent = `Network error: ${e.message}`;
+    pgMessages.push({ role: "assistant", content: accumulatedContent });
+    pgStreaming = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = t("send");
+    return;
   }
+
+  pgMessages.push({ role: "assistant", content: accumulatedContent, reasoning_content: reasoningContent || undefined });
+  assistantBubble.classList.remove("streaming");
+  pgStreaming = false;
+  sendBtn.disabled = false;
+  sendBtn.textContent = t("send");
 }
 
 // Init
