@@ -334,7 +334,8 @@ function renderTokenCard(item) {
     const credits = item.credits || { total: 0, monthly: 0, purchased: 0, free: 0 };
     const sub = item.subscription || { plan_name: "", status: "", period_start: "", period_end: "" };
     const user = item.user || { name: "", email: "" };
-    const pct = credits.total > 0 ? Math.min(100, Math.round((usage.total_cost / credits.total) * 100)) : 0;
+    const totalLimit = usage.total_cost + credits.total;
+    const pct = totalLimit > 0 ? Math.min(100, Math.round((usage.total_cost / totalLimit) * 100)) : 0;
     let barClass = "token-usage-bar-fill";
     if (pct >= 90) barClass += " danger";
     else if (pct >= 75) barClass += " warning";
@@ -360,7 +361,7 @@ function renderTokenCard(item) {
       <div class="token-usage-bar">
         <div class="token-usage-bar-header">
           <span>${t("tokenUsed")} / ${t("tokenTotal")}</span>
-          <span><strong>$${usage.total_cost.toFixed(2)}</strong> / $${credits.total.toFixed(2)}</span>
+          <span><strong>$${usage.total_cost.toFixed(2)}</strong> / $${totalLimit.toFixed(2)}</span>
         </div>
         <div class="token-usage-bar-track">
           <div class="${barClass}" style="width:${pct}%"></div>
