@@ -6,6 +6,7 @@ from typing import Any
 
 from cc_adapter.anthropic.models import AnthropicRequest
 from cc_adapter.headers import make_cc_headers
+from cc_adapter.translator.request import MODEL_PROVIDER_MAP
 from cc_adapter.translator.tool_mapping import normalize_input_args, normalize_schema
 
 logger = logging.getLogger(__name__)
@@ -73,9 +74,18 @@ class AnthropicTranslator:
             if value is not None:
                 logger.warning("Unsupported Anthropic parameter ignored: %s = %s", param, value)
 
+    @staticmethod
+    def _normalize_model(model: str) -> str:
+        if "/" in model:
+            return model
+        prefix = MODEL_PROVIDER_MAP.get(model)
+        if prefix:
+            return f"{prefix}/{model}"
+        return model
+
     def _build_body(self, req: AnthropicRequest) -> dict[str, Any]:
         params: dict[str, Any] = {
-            "model": req.model,
+            "model": self._normalize_model(req.model),
             "messages": self._build_messages(req.messages),
             "max_tokens": req.max_tokens,
             "stream": True,
