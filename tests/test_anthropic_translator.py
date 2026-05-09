@@ -5,7 +5,7 @@ import pytest
 
 from cc_adapter.anthropic.models import AnthropicMessage, AnthropicRequest
 from cc_adapter.anthropic.request import AnthropicTranslator
-from cc_adapter.anthropic.response import collect_and_translate_anthropic_nonstream
+from cc_adapter.anthropic.response import collect_and_translate_anthropic_nonstream, translate_anthropic_stream
 
 
 @pytest.fixture
@@ -301,3 +301,99 @@ async def test_nonstream_error_event_raises():
 
     with pytest.raises(Exception, match="CC error"):
         await collect_and_translate_anthropic_nonstream(fake_stream(), "claude-sonnet-4-6")
+
+
+def _parse_sse_events(sse_text: str) -> list[tuple[str, dict]]:
+    events = []
+    for block in sse_text.strip().split("\n\n"):
+        if not block.strip():
+            continue
+        lines = block.strip().split("\n")
+        event_type = ""
+        data = {}
+        for line in lines:
+            if line.startswith("event: "):
+                event_type = line[7:]
+            elif line.startswith("data: "):
+                data = json.loads(line[6:])
+        if event_type:
+            events.append((event_type, data))
+    return events
+
+
+@pytest.mark.asyncio
+async def test_stream_text_only():
+    async def fake_stream():
+        yield {"type": "text-delta", "text": "Hello"}
+        yield {"type": "text-delta", "text": " World"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}}
+
+    chunks = [c async for c in translate_anthropic_stream(fake_stream(), "claude-sonnet-4-6")]
+    events = _parse_sse_events("".join(chunks))
+
+    assert events[0][0] == "message_start"
+    assert events[0][1]["message"]["model"] == "claude-sonnet-4-6"
+    assert events[0][1]["message"]["role"] == "assistant"
+
+    assert events[1][0] == "content_block_start"
+    assert events[1][1]["content_block"]["type"] == "text"
+
+    assert events[2][0] == "content_block_delta"
+    assert events[2][1]["delta"]["type"] == "text_delta"
+    assert events[2][1]["delta"]["text"] == "Hello"
+
+    assert events[3][0] == "content_block_delta"
+    assert events[3][1]["delta"]["text"] == " World"
+
+    assert events[4][0] == "content_block_stop"
+
+    assert events[5][0] == "message_delta"
+    assert events[5][1]["delta"]["stop_reason"] == "end_turn"
+
+    assert events[6][0] == "message_stop"
+
+    assert len(events) == 7
+
+
+@pytest.mark.asyncio
+async def test_stream_with_thinking():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "thinking..."}
+        yield {"type": "text-delta", "text": "Answer: 42"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 8}}
+
+    chunks = [c async for c in translate_anthropic_stream(fake_stream(), "claude-sonnet-4-6")]
+    events = _parse_sse_events("".join(chunks))
+
+    assert events[0][0] == "message_start"
+    assert events[1][0] == "content_block_start"
+    assert events[1][1]["content_block"]["type"] == "thinking"
+    assert events[2][0] == "content_block_delta"
+    assert events[2][1]["delta"]["type"] == "thinking_delta"
+    assert events[3][0] == "content_block_stop"
+    assert events[4][0] == "content_block_start"
+    assert events[4][1]["content_block"]["type"] == "text"
+    assert events[5][0] == "content_block_delta"
+    assert events[5][1]["delta"]["text"] == "Answer: 42"
+    assert events[6][0] == "content_block_stop"
+    assert events[7][0] == "message_delta"
+    assert events[8][0] == "message_stop"
+
+
+@pytest.mark.asyncio
+async def test_stream_with_tool_call():
+    async def fake_stream():
+        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/test"}}
+        yield {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 10, "outputTokens": 5}}
+
+    chunks = [c async for c in translate_anthropic_stream(fake_stream(), "claude-sonnet-4-6")]
+    events = _parse_sse_events("".join(chunks))
+
+    assert events[0][0] == "message_start"
+    assert events[1][0] == "content_block_start"
+    assert events[1][1]["content_block"]["type"] == "tool_use"
+    assert events[1][1]["content_block"]["name"] == "read"
+    assert events[2][0] == "content_block_stop"
+    assert events[3][0] == "message_delta"
+    assert events[3][1]["delta"]["stop_reason"] == "tool_use"
+    assert events[4][0] == "message_stop"
