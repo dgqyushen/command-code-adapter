@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import time
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -15,8 +14,7 @@ from cc_adapter.anthropic.response import (
 from cc_adapter.admin.state import get_client as get_admin_client, get_config as get_admin_config
 from cc_adapter.config import AppConfig
 from cc_adapter.client import CommandCodeClient
-from cc_adapter.headers import make_cc_headers
-from cc_adapter.errors import AdapterError, AuthenticationError
+from cc_adapter.errors import AdapterError
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +25,42 @@ def _get_client() -> CommandCodeClient:
     cfg = get_admin_config() or AppConfig()
     api_key = cfg.cc_api_key[0] if cfg.cc_api_key else ""
     return get_admin_client() or CommandCodeClient(base_url=cfg.cc_base_url, api_key=api_key)
+
+
+async def _anthropic_stream_with_retry(
+    client: CommandCodeClient,
+    body: dict,
+    headers: dict,
+    model: str,
+):
+    for attempt in range(2):
+        cc_stream = client.generate(body, headers)
+        translator = translate_anthropic_stream(cc_stream, model)
+        should_retry = False
+        async for chunk in translator:
+            should_retry = True
+            yield chunk
+        if not should_retry and attempt == 0:
+            logger.warning("Empty upstream response in anthropic stream (attempt 1/2), retrying...")
+            continue
+        return
+
+
+async def _anthropic_nonstream_with_retry(
+    client: CommandCodeClient,
+    body: dict,
+    headers: dict,
+    model: str,
+):
+    for attempt in range(2):
+        cc_stream = client.generate(body, headers)
+        try:
+            return await collect_and_translate_anthropic_nonstream(cc_stream, model)
+        except AdapterError as e:
+            if attempt == 0 and "empty response" in e.message.lower():
+                logger.warning("Empty upstream response in anthropic nonstream (attempt 1/2), retrying...")
+                continue
+            raise
 
 
 @router.post("/v1/messages")
@@ -59,27 +93,26 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
 
     current_client = _get_client()
     if not current_client.api_key:
-        raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
-
-    start_time = time.time()
-
-    if req.stream:
-        return StreamingResponse(
-            translate_anthropic_stream(current_client.generate(cc_body, cc_headers), req.model),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+        return JSONResponse(
+            status_code=401,
+            content={"error": {"type": "authentication_error", "message": "CC_ADAPTER_CC_API_KEY is not configured"}},
         )
-    else:
-        cc_stream = current_client.generate(cc_body, cc_headers)
-        try:
-            resp = await collect_and_translate_anthropic_nonstream(cc_stream, req.model)
-            return JSONResponse(content=resp.model_dump(exclude_none=True))
-        except AdapterError as e:
-            return JSONResponse(
-                status_code=e.status_code,
-                content={"error": {"type": "api_error", "message": e.message}},
+
+    try:
+        if req.stream:
+            return StreamingResponse(
+                _anthropic_stream_with_retry(current_client, cc_body, cc_headers, req.model),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
             )
+        else:
+            return await _anthropic_nonstream_with_retry(current_client, cc_body, cc_headers, req.model)
+    except AdapterError as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"error": {"type": "api_error", "message": e.message}},
+        )
