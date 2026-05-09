@@ -155,6 +155,96 @@ def test_tool_use_content_block(translator):
     ]
 
 
+def test_multi_turn_tool_use_tool_result(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            AnthropicMessage(role="user", content="read file"),
+            AnthropicMessage(
+                role="assistant",
+                content=[
+                    {
+                        "type": "tool_use",
+                        "id": "call_1",
+                        "name": "read",
+                        "input": {"filePath": "/tmp/test"},
+                    }
+                ],
+            ),
+            AnthropicMessage(
+                role="user",
+                content=[
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_1",
+                        "content": "file contents",
+                    }
+                ],
+            ),
+        ],
+    )
+    body, _ = translator.translate(req)
+    msgs = body["params"]["messages"]
+    assert msgs[0]["role"] == "user"
+    assert msgs[1]["role"] == "assistant"
+    assert msgs[1]["content"] == [
+        {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/test"}}
+    ]
+    assert msgs[2]["role"] == "tool"
+    assert msgs[2]["content"] == [
+        {
+            "type": "tool-result",
+            "toolCallId": "call_1",
+            "toolName": "read",
+            "output": {"type": "text", "value": "file contents"},
+        }
+    ]
+
+
+def test_multi_turn_mixed_text_and_tool_result(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            AnthropicMessage(role="user", content="read file"),
+            AnthropicMessage(
+                role="assistant",
+                content=[
+                    {
+                        "type": "tool_use",
+                        "id": "call_1",
+                        "name": "read",
+                        "input": {"filePath": "/tmp/test"},
+                    }
+                ],
+            ),
+            AnthropicMessage(
+                role="user",
+                content=[
+                    {"type": "text", "text": "Now write the result"},
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_1",
+                        "content": "file contents",
+                    },
+                ],
+            ),
+        ],
+    )
+    body, _ = translator.translate(req)
+    msgs = body["params"]["messages"]
+    assert msgs[2]["role"] == "user"
+    assert msgs[2]["content"] == [{"type": "text", "text": "Now write the result"}]
+    assert msgs[3]["role"] == "tool"
+    assert msgs[3]["content"] == [
+        {
+            "type": "tool-result",
+            "toolCallId": "call_1",
+            "toolName": "read",
+            "output": {"type": "text", "value": "file contents"},
+        }
+    ]
+
+
 def test_tool_result_content_block(translator):
     req = AnthropicRequest(
         model="claude-sonnet-4-6",
@@ -172,10 +262,13 @@ def test_tool_result_content_block(translator):
         ],
     )
     body, _ = translator.translate(req)
+    assert len(body["params"]["messages"]) == 1
+    assert body["params"]["messages"][0]["role"] == "tool"
     assert body["params"]["messages"][0]["content"] == [
         {
             "type": "tool-result",
             "toolCallId": "call_1",
+            "toolName": "unknown",
             "output": {"type": "text", "value": "file contents"},
         }
     ]

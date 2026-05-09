@@ -121,13 +121,25 @@ class AnthropicTranslator:
         return _make_cc_body(params)
 
     def _build_messages(self, messages) -> list[dict[str, Any]]:
+        tool_names: dict[str, str] = {}
+        for msg in messages:
+            if isinstance(msg.content, list):
+                for block in msg.content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        tool_names[block.get("id", "")] = block.get("name", "")
         result = []
         for msg in messages:
             if isinstance(msg.content, str):
-                content = [{"type": "text", "text": msg.content}]
+                result.append({"role": msg.role, "content": [{"type": "text", "text": msg.content}]})
             else:
-                content = self._translate_content_blocks(msg.content)
-            result.append({"role": msg.role, "content": content})
+                blocks = self._translate_content_blocks(msg.content)
+                tool_results = [b for b in blocks if b["type"] == "tool-result"]
+                other_blocks = [b for b in blocks if b["type"] != "tool-result"]
+                if other_blocks:
+                    result.append({"role": msg.role, "content": other_blocks})
+                for tr in tool_results:
+                    tr["toolName"] = tool_names.get(tr.get("toolCallId", ""), "unknown")
+                    result.append({"role": "tool", "content": [tr]})
         return result
 
     def _translate_content_blocks(self, blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
