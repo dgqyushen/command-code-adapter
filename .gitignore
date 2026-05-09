@@ -35,4 +35,5 @@ Thumbs.db
 
 # Project specific
 .superpowers/
+.worktrees/
 docs/
