@@ -11,7 +11,7 @@ from cc_adapter.translator.tool_mapping import normalize_input_args, normalize_s
 
 logger = logging.getLogger(__name__)
 
-_NOT_SUPPORTED = {"top_p", "top_k", "stop_sequences", "metadata"}
+_NOT_SUPPORTED = {"top_p", "top_k", "stop_sequences"}
 
 _CC_BODY_SKELETON: dict[str, Any] = {
     "memory": "",
@@ -112,7 +112,7 @@ class AnthropicTranslator:
                 choice["name"] = tc.name
             params["tool_choice"] = choice
 
-        if req.thinking and req.thinking.type == "enabled":
+        if req.thinking and req.thinking.type in ("enabled", "adaptive"):
             params["reasoning_effort"] = _budget_to_effort(req.thinking.budget_tokens)
 
         if req.temperature is not None:
