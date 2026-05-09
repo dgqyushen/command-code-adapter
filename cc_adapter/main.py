@@ -19,6 +19,7 @@ from cc_adapter.translator.response import translate_stream, collect_and_transla
 from cc_adapter.errors import AdapterError, AuthenticationError
 from cc_adapter.models.openai import ChatCompletionRequest
 from cc_adapter.admin import router as admin_router
+from cc_adapter.anthropic.router import router as anthropic_router
 from cc_adapter.admin.auth import set_password, validate_token
 from cc_adapter.admin.state import init as admin_init, get_client as get_admin_client
 
@@ -70,6 +71,7 @@ app.add_middleware(CorrelationIDMiddleware)
 
 admin_init(_get_config(), _get_client())
 app.include_router(admin_router.router)
+app.include_router(anthropic_router)
 
 admin_static = StaticFiles(directory=Path(__file__).parent / "admin" / "static", html=True)
 app.mount("/admin", admin_static, name="admin_static")
