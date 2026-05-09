@@ -1,9 +1,11 @@
+import json
 import logging
 
 import pytest
 
 from cc_adapter.anthropic.models import AnthropicMessage, AnthropicRequest
 from cc_adapter.anthropic.request import AnthropicTranslator
+from cc_adapter.anthropic.response import collect_and_translate_anthropic_nonstream
 
 
 @pytest.fixture
@@ -220,3 +222,82 @@ def test_image_content_block_skipped(translator, caplog):
     assert body["params"]["messages"][0]["content"] == [
         {"type": "text", "text": "what is this?"}
     ]
+
+
+@pytest.mark.asyncio
+async def test_nonstream_text_only():
+    async def fake_stream():
+        yield {"type": "text-delta", "text": "Hello"}
+        yield {"type": "text-delta", "text": " World"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}}
+
+    resp = await collect_and_translate_anthropic_nonstream(fake_stream(), "claude-sonnet-4-6")
+    assert resp.type == "message"
+    assert resp.role == "assistant"
+    assert len(resp.content) == 1
+    assert resp.content[0]["type"] == "text"
+    assert resp.content[0]["text"] == "Hello World"
+    assert resp.stop_reason == "end_turn"
+    assert resp.usage.input_tokens == 10
+    assert resp.usage.output_tokens == 5
+
+
+@pytest.mark.asyncio
+async def test_nonstream_with_thinking():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "I need to think..."}
+        yield {"type": "text-delta", "text": "Answer: 42"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 8}}
+
+    resp = await collect_and_translate_anthropic_nonstream(fake_stream(), "claude-sonnet-4-6")
+    assert len(resp.content) == 2
+    assert resp.content[0]["type"] == "thinking"
+    assert resp.content[0]["thinking"] == "I need to think..."
+    assert resp.content[1]["type"] == "text"
+    assert resp.content[1]["text"] == "Answer: 42"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_with_tool_calls():
+    async def fake_stream():
+        yield {"type": "text-delta", "text": "Let me read the file"}
+        yield {"type": "tool-call", "toolCallId": "call_1", "toolName": "read", "input": {"path": "/tmp/test"}}
+        yield {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 10, "outputTokens": 15}}
+
+    resp = await collect_and_translate_anthropic_nonstream(fake_stream(), "claude-sonnet-4-6")
+    assert len(resp.content) == 2
+    assert resp.content[0]["type"] == "text"
+    assert resp.content[0]["text"] == "Let me read the file"
+    assert resp.content[1]["type"] == "tool_use"
+    assert resp.content[1]["name"] == "read"
+    assert resp.stop_reason == "tool_use"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_thinking_only_fallback_to_text():
+    async def fake_stream():
+        yield {"type": "reasoning-delta", "text": "thinking hard"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}}
+
+    resp = await collect_and_translate_anthropic_nonstream(fake_stream(), "claude-sonnet-4-6")
+    assert len(resp.content) == 1
+    assert resp.content[0]["type"] == "text"
+    assert resp.content[0]["text"] == "thinking hard"
+
+
+@pytest.mark.asyncio
+async def test_nonstream_empty_response_raises_error():
+    async def fake_stream():
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 0}}
+
+    with pytest.raises(Exception):
+        await collect_and_translate_anthropic_nonstream(fake_stream(), "claude-sonnet-4-6")
+
+
+@pytest.mark.asyncio
+async def test_nonstream_error_event_raises():
+    async def fake_stream():
+        yield {"type": "error", "error": {"message": "CC error", "statusCode": 502}}
+
+    with pytest.raises(Exception, match="CC error"):
+        await collect_and_translate_anthropic_nonstream(fake_stream(), "claude-sonnet-4-6")
