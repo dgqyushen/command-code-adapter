@@ -6,7 +6,7 @@ SCHEMA_PARAM_MAP = {
     "newString": "new_str",
 }
 
-FILE_TOOLS = {"read", "write", "edit"}
+FILE_TOOLS = {"read", "write", "edit", "readonly"}
 
 ARGS_PATH_MAP = {
     "path": "filePath",
@@ -41,7 +41,7 @@ def normalize_args(tool_name: str, args: dict) -> dict:
         return args
     result = {}
     for k, v in args.items():
-        if tool_name in FILE_TOOLS:
+        if tool_name.lower() in FILE_TOOLS:
             k = ARGS_PATH_MAP.get(k, k)
         k = ARGS_STR_MAP.get(k, k)
         result[k] = v
