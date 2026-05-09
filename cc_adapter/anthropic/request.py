@@ -56,11 +56,7 @@ def _extract_system_text(system: str | list[dict[str, Any]] | None) -> str | Non
         return None
     if isinstance(system, str):
         return system
-    texts = [
-        b.get("text", "")
-        for b in system
-        if isinstance(b, dict) and b.get("type") == "text"
-    ]
+    texts = [b.get("text", "") for b in system if isinstance(b, dict) and b.get("type") == "text"]
     return " ".join(texts) if texts else None
 
 
@@ -143,9 +139,7 @@ class AnthropicTranslator:
                 raw_content = block.get("content", "")
                 if isinstance(raw_content, list):
                     raw_content = " ".join(
-                        b.get("text", "")
-                        for b in raw_content
-                        if isinstance(b, dict) and b.get("type") == "text"
+                        b.get("text", "") for b in raw_content if isinstance(b, dict) and b.get("type") == "text"
                     )
                 result.append(
                     {

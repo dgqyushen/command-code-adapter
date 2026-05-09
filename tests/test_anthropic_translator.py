@@ -219,9 +219,7 @@ def test_image_content_block_skipped(translator, caplog):
     )
     body, _ = translator.translate(req)
     assert "Image" in caplog.text
-    assert body["params"]["messages"][0]["content"] == [
-        {"type": "text", "text": "what is this?"}
-    ]
+    assert body["params"]["messages"][0]["content"] == [{"type": "text", "text": "what is this?"}]
 
 
 @pytest.mark.asyncio

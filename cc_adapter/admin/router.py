@@ -258,9 +258,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
         for field_name, env_key in field_map.items():
             if key == env_key and field_name in update_map:
                 value = (
-                    normalize_api_keys(update_map[field_name])
-                    if field_name == "cc_api_key"
-                    else update_map[field_name]
+                    normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
                 )
                 if field_name == "cc_api_key":
                     lines[i] = f"{env_key}={json.dumps(value)}\n"
@@ -269,9 +267,7 @@ def _update_env_file(update: ConfigUpdate) -> None:
                 existing_keys.add(field_name)
     for field_name, env_key in field_map.items():
         if field_name in update_map and field_name not in existing_keys:
-            value = (
-                normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
-            )
+            value = normalize_api_keys(update_map[field_name]) if field_name == "cc_api_key" else update_map[field_name]
             if field_name == "cc_api_key":
                 lines.append(f"{env_key}={json.dumps(value)}\n")
             else:

@@ -85,9 +85,6 @@ def make_cc_body(config: dict[str, Any], params: dict[str, Any]) -> dict[str, An
     return {**_CC_BODY_SKELETON, "config": config, "params": params}
 
 
-
-
-
 class RequestTranslator:
     def translate(self, req: ChatCompletionRequest) -> tuple[dict[str, Any], dict[str, Any]]:
         self._warn_unsupported(req)
@@ -184,8 +181,6 @@ class RequestTranslator:
         if prefix:
             return f"{prefix}/{model}"
         return model
-
-
 
     def _build_body(self, req: ChatCompletionRequest, system_prompt: str | None, messages: list) -> dict:
         params: dict[str, Any] = {

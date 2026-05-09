@@ -58,9 +58,7 @@ async def lifespan(app: FastAPI):
     configure_logging(log_format=cfg.log_format, log_level=cfg.log_level)
     set_password(cfg.admin_password)
     logger.info("CC Adapter starting — CC API: %s", cfg.cc_base_url)
-    logger.info(
-        "Admin panel: http://%s:%s/admin/", cfg.host if cfg.host != "0.0.0.0" else "localhost", cfg.port
-    )
+    logger.info("Admin panel: http://%s:%s/admin/", cfg.host if cfg.host != "0.0.0.0" else "localhost", cfg.port)
     if not cfg.cc_api_key:
         logger.warning("CC_ADAPTER_CC_API_KEY is not set. Set it via environment variable or .env file.")
     yield

@@ -17,6 +17,7 @@ def setup():
 
 def _clear_state():
     from cc_adapter.admin.state import init as admin_state_init
+
     cfg = AppConfig()
     admin_state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=""))
     set_password("")
