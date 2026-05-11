@@ -20,6 +20,7 @@ from cc_adapter.errors import AdapterError, AuthenticationError
 from cc_adapter.models.openai import ChatCompletionRequest
 from cc_adapter.admin import router as admin_router
 from cc_adapter.anthropic.router import router as anthropic_router
+from cc_adapter.models_data import MODELS_DATA
 from cc_adapter.admin.auth import set_password, validate_token
 from cc_adapter.admin.state import init as admin_init, get_client as get_admin_client
 
@@ -73,6 +74,11 @@ app.include_router(anthropic_router)
 
 admin_static = StaticFiles(directory=Path(__file__).parent / "admin" / "static", html=True)
 app.mount("/admin", admin_static, name="admin_static")
+
+
+@app.get("/v1/models")
+async def list_models():
+    return {"object": "list", "data": MODELS_DATA}
 
 
 @app.exception_handler(AdapterError)
