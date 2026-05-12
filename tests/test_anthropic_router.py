@@ -15,9 +15,9 @@ async def test_anthropic_invalid_body():
 
 @pytest.mark.asyncio
 async def test_anthropic_no_api_key():
-    from cc_adapter.admin.state import init as admin_state_init
-    from cc_adapter.config import AppConfig
-    from cc_adapter.client import CommandCodeClient
+    from cc_adapter.core.runtime import init as admin_state_init
+    from cc_adapter.core.config import AppConfig
+    from cc_adapter.command_code.client import CommandCodeClient
 
     admin_state_init(AppConfig(cc_api_key=""), CommandCodeClient(base_url="https://api.commandcode.ai", api_key=""))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

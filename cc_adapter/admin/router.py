@@ -8,15 +8,15 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 
-from cc_adapter.admin.auth import generate_token, validate_token
-from cc_adapter.admin.state import get_config, get_client, init as state_init
-from cc_adapter.config import AppConfig, DEFAULT_MODEL
-from cc_adapter.client import CommandCodeClient
-from cc_adapter._shared import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX
-from cc_adapter._body import make_cc_body, _make_config
+from cc_adapter.core.auth import generate_token, validate_token
+from cc_adapter.core.runtime import get_config, get_client, init as state_init
+from cc_adapter.core.config import AppConfig, DEFAULT_MODEL
+from cc_adapter.command_code.client import CommandCodeClient
+from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX
+from cc_adapter.command_code.body import make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens
-from cc_adapter.headers import make_cc_headers
-from cc_adapter._utils import normalize_api_keys, is_deepseek_v4_model
+from cc_adapter.command_code.headers import make_cc_headers
+from cc_adapter.core.utils import normalize_api_keys, is_deepseek_v4_model
 
 router = APIRouter(prefix="/admin/api")
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class ConfigUpdate(BaseModel):
 
 
 def _primary_api_key(value: str | list[str] | None) -> str:
-    from cc_adapter._utils import normalize_api_keys
+    from cc_adapter.core.utils import normalize_api_keys
 
     keys = normalize_api_keys(value)
     return keys[0] if keys else ""

@@ -3,11 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from cc_adapter.anthropic.models import AnthropicRequest
-from cc_adapter.headers import make_cc_headers
-from cc_adapter._shared import MODEL_PROVIDER_MAP
-from cc_adapter._tool_mapping import normalize_input_args, normalize_schema
-from cc_adapter._body import _make_config, make_cc_body
+from cc_adapter.providers.anthropic.models import AnthropicRequest
+from cc_adapter.command_code.headers import make_cc_headers
+from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP
+from cc_adapter.providers.shared.tool_mapping import normalize_input_args, normalize_schema
+from cc_adapter.command_code.body import _make_config, make_cc_body
 
 logger = logging.getLogger(__name__)
 

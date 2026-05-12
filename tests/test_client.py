@@ -1,7 +1,7 @@
 import httpx
 import pytest
-from cc_adapter.client import CommandCodeClient, _parse_sse_line
-from cc_adapter.errors import AuthenticationError, UpstreamError
+from cc_adapter.command_code.client import CommandCodeClient, _parse_sse_line
+from cc_adapter.core.errors import AuthenticationError, UpstreamError
 
 
 @pytest.mark.asyncio

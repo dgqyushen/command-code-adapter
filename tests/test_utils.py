@@ -1,5 +1,5 @@
 import pytest
-from cc_adapter._utils import normalize_api_keys, is_deepseek_v4_model
+from cc_adapter.core.utils import normalize_api_keys, is_deepseek_v4_model
 
 
 class TestNormalizeApiKeys:

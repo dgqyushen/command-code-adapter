@@ -6,8 +6,8 @@ from typing import AsyncGenerator, Any
 
 import httpx
 
-from cc_adapter.errors import map_upstream_error, AuthenticationError, TimeoutError_, UpstreamError
-from cc_adapter.headers import make_cc_headers
+from cc_adapter.core.errors import map_upstream_error, AuthenticationError, TimeoutError_, UpstreamError
+from cc_adapter.command_code.headers import make_cc_headers
 
 logger = logging.getLogger(__name__)
 

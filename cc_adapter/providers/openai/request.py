@@ -6,12 +6,17 @@ import json
 import logging
 from typing import Any
 
-from cc_adapter.models.openai import ChatCompletionRequest
-from cc_adapter._tool_mapping import normalize_input_args, normalize_schema
-from cc_adapter._shared import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX, REASONING_EFFORT_MAP, NOT_SUPPORTED_PARAMS
-from cc_adapter._body import make_cc_body, _make_config
-from cc_adapter._utils import is_deepseek_v4_model
-from cc_adapter.headers import make_cc_headers
+from cc_adapter.providers.openai.models import ChatCompletionRequest
+from cc_adapter.providers.shared.tool_mapping import normalize_input_args, normalize_schema
+from cc_adapter.providers.shared.model_mapping import (
+    MODEL_PROVIDER_MAP,
+    REASONING_EFFORT_MAX,
+    REASONING_EFFORT_MAP,
+    NOT_SUPPORTED_PARAMS,
+)
+from cc_adapter.command_code.body import make_cc_body, _make_config
+from cc_adapter.core.utils import is_deepseek_v4_model
+from cc_adapter.command_code.headers import make_cc_headers
 
 logger = logging.getLogger(__name__)
 

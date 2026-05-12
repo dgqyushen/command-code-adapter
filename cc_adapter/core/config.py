@@ -1,7 +1,7 @@
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from cc_adapter._utils import normalize_api_keys
+from cc_adapter.core.utils import normalize_api_keys
 
 
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"

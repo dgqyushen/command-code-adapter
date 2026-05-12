@@ -1,7 +1,7 @@
 import pytest
-from cc_adapter.admin.state import init, get_config, get_client, get_base_url, get_api_keys
-from cc_adapter.config import AppConfig
-from cc_adapter.client import CommandCodeClient
+from cc_adapter.core.runtime import init, get_config, get_client, get_base_url, get_api_keys
+from cc_adapter.core.config import AppConfig
+from cc_adapter.command_code.client import CommandCodeClient
 
 
 @pytest.fixture(autouse=True)

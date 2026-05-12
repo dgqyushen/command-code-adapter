@@ -3,9 +3,12 @@ import logging
 
 import pytest
 
-from cc_adapter.anthropic.models import AnthropicMessage, AnthropicRequest
-from cc_adapter.anthropic.request import AnthropicTranslator
-from cc_adapter.anthropic.response import collect_and_translate_anthropic_nonstream, translate_anthropic_stream
+from cc_adapter.providers.anthropic.models import AnthropicMessage, AnthropicRequest
+from cc_adapter.providers.anthropic.request import AnthropicTranslator
+from cc_adapter.providers.anthropic.response import (
+    collect_and_translate_anthropic_nonstream,
+    translate_anthropic_stream,
+)
 
 
 @pytest.fixture

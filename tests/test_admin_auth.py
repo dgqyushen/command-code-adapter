@@ -1,6 +1,6 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
-from cc_adapter.admin.auth import set_password, validate_token, generate_token
+from cc_adapter.core.auth import set_password, validate_token, generate_token
 from cc_adapter.main import app
 
 
@@ -42,9 +42,9 @@ def test_password_change_invalidates_token():
 
 @pytest.mark.asyncio
 async def test_login_returns_503_when_no_password():
-    from cc_adapter.admin.state import init as admin_state_init
-    from cc_adapter.config import AppConfig
-    from cc_adapter.client import CommandCodeClient
+    from cc_adapter.core.runtime import init as admin_state_init
+    from cc_adapter.core.config import AppConfig
+    from cc_adapter.command_code.client import CommandCodeClient
 
     cfg = AppConfig(admin_password="")
     admin_state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=""))
@@ -56,9 +56,9 @@ async def test_login_returns_503_when_no_password():
 
 @pytest.mark.asyncio
 async def test_protected_endpoint_returns_503_when_no_password():
-    from cc_adapter.admin.state import init as admin_state_init
-    from cc_adapter.config import AppConfig
-    from cc_adapter.client import CommandCodeClient
+    from cc_adapter.core.runtime import init as admin_state_init
+    from cc_adapter.core.config import AppConfig
+    from cc_adapter.command_code.client import CommandCodeClient
 
     cfg = AppConfig(admin_password="")
     admin_state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=""))
@@ -70,9 +70,9 @@ async def test_protected_endpoint_returns_503_when_no_password():
 
 @pytest.mark.asyncio
 async def test_public_endpoints_return_200_without_auth():
-    from cc_adapter.admin.state import init as admin_state_init
-    from cc_adapter.config import AppConfig
-    from cc_adapter.client import CommandCodeClient
+    from cc_adapter.core.runtime import init as admin_state_init
+    from cc_adapter.core.config import AppConfig
+    from cc_adapter.command_code.client import CommandCodeClient
 
     cfg = AppConfig(admin_password="")
     admin_state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=""))

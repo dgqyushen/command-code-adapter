@@ -1,4 +1,4 @@
-from cc_adapter.headers import make_cc_headers, CC_BASE_HEADERS
+from cc_adapter.command_code.headers import make_cc_headers, CC_BASE_HEADERS
 
 
 class TestMakeCcHeaders:

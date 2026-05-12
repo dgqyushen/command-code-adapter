@@ -6,28 +6,26 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from cc_adapter.anthropic.models import AnthropicRequest
-from cc_adapter.anthropic.request import AnthropicTranslator
-from cc_adapter.anthropic.response import (
+from cc_adapter.providers.anthropic.models import AnthropicRequest
+from cc_adapter.providers.anthropic.request import AnthropicTranslator
+from cc_adapter.providers.anthropic.response import (
     translate_anthropic_stream,
     collect_and_translate_anthropic_nonstream,
 )
-from cc_adapter.admin.state import get_client as get_admin_client, get_config as get_admin_config
-from cc_adapter.config import AppConfig
-from cc_adapter.client import CommandCodeClient
-from cc_adapter.errors import AdapterError
+from cc_adapter.core.runtime import get_client, get_config, get_anthropic_translator
+from cc_adapter.core.config import AppConfig
+from cc_adapter.command_code.client import CommandCodeClient
+from cc_adapter.core.errors import AdapterError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_anthropic_translator: AnthropicTranslator | None = None
-
 
 def _get_client() -> CommandCodeClient:
-    cfg = get_admin_config() or AppConfig()
+    cfg = get_config() or AppConfig()
     api_key = cfg.cc_api_key[0] if cfg.cc_api_key else ""
-    existing = get_admin_client()
+    existing = get_client()
     if existing is not None:
         return existing
     return CommandCodeClient(
@@ -37,13 +35,6 @@ def _get_client() -> CommandCodeClient:
         max_keepalive_connections=cfg.http_max_keepalive_connections,
         http2=cfg.http2,
     )
-
-
-def _get_anthropic_translator() -> AnthropicTranslator:
-    global _anthropic_translator
-    if _anthropic_translator is None:
-        _anthropic_translator = AnthropicTranslator()
-    return _anthropic_translator
 
 
 async def _anthropic_stream_with_retry(
@@ -96,14 +87,14 @@ async def _anthropic_nonstream_with_retry(
 
 @router.post("/v1/messages")
 async def anthropic_chat(req: AnthropicRequest, request: Request):
-    cfg = get_admin_config() or AppConfig()
+    cfg = get_config() or AppConfig()
 
     api_key_header = request.headers.get("x-api-key", "")
     auth = request.headers.get("Authorization", "")
     token = auth[7:] if auth.startswith("Bearer ") else api_key_header
 
     if cfg.access_key and token != cfg.access_key:
-        from cc_adapter.admin.auth import validate_token
+        from cc_adapter.core.auth import validate_token
 
         if not (cfg.admin_password and validate_token(token)):
             return JSONResponse(
@@ -119,7 +110,8 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
         "yes" if req.tools else "no",
     )
 
-    cc_body, cc_headers = _get_anthropic_translator().translate(req)
+    translator = get_anthropic_translator()
+    cc_body, cc_headers = translator.translate(req)
     cc_body["params"]["stream"] = True
 
     current_client = _get_client()

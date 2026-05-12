@@ -4,7 +4,7 @@
 
 ```bash
 poetry install                    # install deps
-poetry run pytest                 # run all 167 tests
+poetry run pytest                 # run full test suite
 poetry run black .                # format (line-length 120)
 poetry run python -m cc_adapter   # start dev server (port 8080, or set CC_ADAPTER_PORT)
 docker build -t dgqyushen/command-code-proxy:latest .
@@ -15,9 +15,9 @@ docker compose up -d              # compose.yml + optional compose.override.yml
 
 - CLI: `cc_adapter/__main__.py` → `main.py:run()` → uvicorn
 - Import: `from cc_adapter.main import app` (FastAPI app)
-- `POST /v1/chat/completions` — OpenAI chat in `main.py` (inline handler)
-- `POST /v1/messages` — Anthropic chat in `cc_adapter/anthropic/router.py`
-- `GET /v1/models` — OpenAPI model listing in `main.py` (hardcoded 19 models from `cc_adapter/models_data.py`)
+- `POST /v1/chat/completions` — OpenAI chat in `providers/openai/router.py`
+- `POST /v1/messages` — Anthropic chat in `providers/anthropic/router.py`
+- `GET /v1/models` — OpenAPI model listing in `main.py` (hardcoded 19 models from `catalog/models_data.py`)
 - `GET /admin/api/models` — admin model list, no auth
 
 ## Config (env prefix `CC_ADAPTER_`)
@@ -31,35 +31,35 @@ docker compose up -d              # compose.yml + optional compose.override.yml
 | `CC_ADAPTER_PORT` | `port` | default `8080` |
 | `CC_ADAPTER_ADMIN_PASSWORD` | `admin_password` | Admin login password |
 
-All fields in `config.py:AppConfig`. Uses `.env` file. Config loaded lazily as module-level singletons in `main.py`.
+All fields in `core/config.py:AppConfig`. Uses `.env` file. Config loaded lazily via `core/runtime.py`.
 
 ## Architecture
 
 ```
 POST /v1/messages                     POST /v1/chat/completions
-  → anthropic/                          → openai/ (OpenAI)
+  → providers/anthropic/                → providers/openai/
       request.py (Anthropic→CC)           request.py (OpenAI→CC)
       response.py (CC→Anthropic)           response.py (CC→OpenAI)
-  → CommandCodeClient.generate()        → CommandCodeClient.generate()
+  → command_code/client.py             → command_code/client.py
 ```
 
-- **Two translators** in `anthropic/` and `openai/`; shared utilities in `_shared.py`, `_tool_mapping.py`, `_body.py`.
-- **Singletons**: `_config`, `_cc_client`, `_request_translator` in `main.py`; admin can swap via `admin/state.py:init()`.
-- **Retry**: Both paths retry once on empty upstream response.
-- **Admin auth**: HMAC-signed token (not JWT); embeds `exp` + password hash prefix.
+- **Two translators** in `providers/anthropic/` and `providers/openai/`; shared utilities in `providers/shared/`, `command_code/`, `core/`.
+- **Singletons**: `config`, `client`, `translators` owned by `core/runtime.py`.
+- **Retry**: Both paths retry once on empty upstream response. OpenAI retry in `providers/openai/router.py`.
+- **Admin auth**: HMAC-signed token in `core/auth.py` (not JWT); embeds `exp` + password hash prefix.
 
 ## Translation quirks — OpenAI
 
-- **Model canonical IDs**: `MODEL_PROVIDER_MAP` in `cc_adapter/_shared.py` maps bare names (e.g. `step-3-5-flash`) to full CC API IDs (`stepfun/Step-3.5-Flash`). Unknown models pass through unchanged.
+- **Model canonical IDs**: `MODEL_PROVIDER_MAP` in `providers/shared/model_mapping.py` maps bare names (e.g. `step-3-5-flash`) to full CC API IDs (`stepfun/Step-3.5-Flash`). Unknown models pass through unchanged.
 - **Unsupported params silently dropped**: `top_p`, `stop`, `n`, `presence_penalty`, `frequency_penalty`, `user`, `response_format`.
 - **System prompt** extracted from messages, passed as top-level `system` field.
 - **`tool` role messages** rewritten to `user` role with `tool-call`/`tool-result` content blocks.
-- **Tool param mapping**: `filePath`/`oldString`/`newString` ↔ `path`/`old_str`/`new_str` in `cc_adapter/_tool_mapping.py`.
+- **Tool param mapping**: `filePath`/`oldString`/`newString` ↔ `path`/`old_str`/`new_str` in `providers/shared/tool_mapping.py`.
 - **`reasoning_effort`**: deepseek-v4 models map `xhigh`/`max` → `max` with special verbose prompt (`REASONING_EFFORT_MAX`). Other models get simple instruction injection.
 
 ## Translation quirks — Anthropic
 
-- **Independent translator** — own models, request, response under `cc_adapter/anthropic/`; imports `_tool_mapping.py`, `_shared.py`.
+- **Independent translator** — own models, request, response under `providers/anthropic/`; imports `providers/shared/tool_mapping.py`, `providers/shared/model_mapping.py`.
 - **thinking.budget_tokens** → `reasoning_effort`: <4K=low, <8K=medium, <16K=high, >=16K=xhigh.
 - **Content blocks**: `tool_use` → `tool-call`, `tool_result` → `tool-result`, `image` → warn+skip, `thinking` → pass.
 - **Auth**: `x-api-key` or `Authorization: Bearer`.
@@ -94,7 +94,7 @@ After significant code changes: build → compose up → run `e2e_test.sh` to ve
 
 ## End-of-work checklist
 
-1. `poetry run pytest tests/` — unit tests pass (167 tests, 1 known flaky)
+1. `poetry run pytest tests/` — unit tests pass
 2. `docker build` — image builds
 3. `docker compose up -d` — container starts
 4. `CC_ADAPTER_KEY=<key> bash tests/e2e_test.sh` — all 6 e2e scenarios pass (重点测试容器)

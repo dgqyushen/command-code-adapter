@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from cc_adapter.logging import configure_logging, filter_sensitive_data
+from cc_adapter.core.logging import configure_logging, filter_sensitive_data
 
 
 def test_configure_logging_json_output(capsys):

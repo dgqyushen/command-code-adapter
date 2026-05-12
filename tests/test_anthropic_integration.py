@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from cc_adapter.admin.state import init as admin_init
-from cc_adapter.client import CommandCodeClient
-from cc_adapter.config import AppConfig
+from cc_adapter.core.runtime import init as admin_init
+from cc_adapter.command_code.client import CommandCodeClient
+from cc_adapter.core.config import AppConfig
 from cc_adapter.main import app
 
 

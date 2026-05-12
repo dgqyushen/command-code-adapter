@@ -1,10 +1,10 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 from cc_adapter.main import app
-from cc_adapter.admin.auth import set_password
-from cc_adapter.admin.state import init as admin_state_init
-from cc_adapter.config import AppConfig
-from cc_adapter.client import CommandCodeClient
+from cc_adapter.core.auth import set_password
+from cc_adapter.core.runtime import init as admin_state_init
+from cc_adapter.core.config import AppConfig
+from cc_adapter.command_code.client import CommandCodeClient
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +16,7 @@ def setup():
 
 
 def _clear_state():
-    from cc_adapter.admin.state import init as admin_state_init
+    from cc_adapter.core.runtime import init as admin_state_init
 
     cfg = AppConfig()
     admin_state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=""))
@@ -63,7 +63,7 @@ async def test_chat_completions_no_auth_when_access_key_empty():
 @pytest.mark.asyncio
 async def test_chat_completions_falls_back_to_module_client():
     _clear_state()
-    from cc_adapter.admin.state import init as admin_state_init
+    from cc_adapter.core.runtime import init as admin_state_init
 
     cfg = AppConfig(access_key="")
     admin_state_init(cfg, None)

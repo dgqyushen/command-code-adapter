@@ -1,4 +1,4 @@
-from cc_adapter._tool_mapping import normalize_schema, normalize_args
+from cc_adapter.providers.shared.tool_mapping import normalize_schema, normalize_args
 
 
 class TestNormalizeSchema:

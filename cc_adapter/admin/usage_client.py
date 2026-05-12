@@ -5,7 +5,7 @@ import logging
 
 import httpx
 
-from cc_adapter.headers import make_cc_headers
+from cc_adapter.command_code.headers import make_cc_headers
 
 logger = logging.getLogger(__name__)
 

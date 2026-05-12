@@ -1,11 +1,11 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 from cc_adapter.main import app
-from cc_adapter.admin.auth import set_password
+from cc_adapter.core.auth import set_password
 from cc_adapter.admin.router import router as admin_router
-from cc_adapter.admin.state import init as admin_state_init
-from cc_adapter.config import AppConfig
-from cc_adapter.client import CommandCodeClient
+from cc_adapter.core.runtime import init as admin_state_init
+from cc_adapter.core.config import AppConfig
+from cc_adapter.command_code.client import CommandCodeClient
 
 app.include_router(admin_router)
 
@@ -45,7 +45,7 @@ async def test_get_config_requires_auth():
 @pytest.mark.asyncio
 async def test_get_config_returns_fields():
     set_password("admin123")
-    from cc_adapter.admin.auth import generate_token
+    from cc_adapter.core.auth import generate_token
 
     my_token = generate_token()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -62,8 +62,8 @@ async def test_get_config_returns_fields():
 @pytest.mark.asyncio
 async def test_update_config_uses_first_configured_key_for_client(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    from cc_adapter.admin.auth import generate_token
-    from cc_adapter.admin.state import get_client, get_config
+    from cc_adapter.core.auth import generate_token
+    from cc_adapter.core.runtime import get_client, get_config
 
     my_token = generate_token()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -81,7 +81,7 @@ async def test_update_config_uses_first_configured_key_for_client(tmp_path, monk
 @pytest.mark.asyncio
 async def test_update_config_persists_prefixed_env_keys(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    from cc_adapter.admin.auth import generate_token
+    from cc_adapter.core.auth import generate_token
 
     my_token = generate_token()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -102,8 +102,8 @@ async def test_update_config_persists_prefixed_env_keys(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_usage_query_returns_empty_when_no_keys():
-    from cc_adapter.admin.state import init as admin_state_init, get_config
-    from cc_adapter.admin.auth import generate_token
+    from cc_adapter.core.runtime import init as admin_state_init, get_config
+    from cc_adapter.core.auth import generate_token
 
     cfg = get_config()
     cfg.cc_api_key = []
