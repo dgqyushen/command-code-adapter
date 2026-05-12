@@ -146,32 +146,6 @@ cc_adapter/
 └── admin/                 # Web 管理面板
     └── ...                #   管理界面
 ```
-```
-
-### 许可证
-
-MIT
-
----
-
-<h1 id="english">English</h1>
-
-An OpenAI Chat Completions compatible adapter that exposes the [Command Code API](https://api.commandcode.ai) as a standard OpenAI-format endpoint.
-
-Supports **streaming (SSE)** and **non-streaming** responses, with a built-in Web admin panel.
-
-### Quick Start
-
-```bash
-# Install dependencies
-poetry install
-
-# Configure API Key
-export CC_ADAPTER_CC_API_KEY=user_your_key_here
-
-# Start the server
-poetry run python -m cc_adapter
-```
 
 Once started, visit `http://localhost:8080`. The admin panel is at `http://localhost:8080/admin`.
 
@@ -295,8 +269,6 @@ cc_adapter/
 │   └── models_data.py     #   Model listings
 └── admin/                 # Web admin panel
     └── ...                #   Admin interface
-```
-        └── admin.js
 ```
 
 ### License
