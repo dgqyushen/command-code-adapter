@@ -53,7 +53,7 @@ async def collect_and_translate_anthropic_nonstream(
                 "type": "tool_use",
                 "id": event.get("toolCallId", f"toolu_{uuid.uuid4().hex[:12]}"),
                 "name": event.get("toolName", ""),
-                "input": normalize_args(event.get("toolName", ""), event.get("input", {})),
+                "input": normalize_args(event.get("toolName", ""), event.get("input", {}), map_path=False),
             }
             tool_calls.append(tc)
 
@@ -237,6 +237,7 @@ async def translate_anthropic_stream(
                     in_text = False
                 tool_name = event.get("toolName", "")
                 raw_input = event.get("input", {})
+                tool_input = normalize_args(tool_name, raw_input, map_path=False)
                 yield _anthropic_sse(
                     "content_block_start",
                     {
@@ -246,10 +247,22 @@ async def translate_anthropic_stream(
                             "type": "tool_use",
                             "id": event.get("toolCallId", f"toolu_{uuid.uuid4().hex[:12]}"),
                             "name": tool_name,
-                            "input": normalize_args(tool_name, raw_input),
+                            "input": {},
                         },
                     },
                 )
+                if tool_input:
+                    yield _anthropic_sse(
+                        "content_block_delta",
+                        {
+                            "type": "content_block_delta",
+                            "index": content_index,
+                            "delta": {
+                                "type": "input_json_delta",
+                                "partial_json": json.dumps(tool_input, ensure_ascii=False, separators=(",", ":")),
+                            },
+                        },
+                    )
                 yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
                 content_index += 1
 

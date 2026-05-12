@@ -76,12 +76,7 @@ class AnthropicTranslator:
 
     @staticmethod
     def _normalize_model(model: str) -> str:
-        if "/" in model:
-            return model
-        prefix = MODEL_PROVIDER_MAP.get(model)
-        if prefix:
-            return f"{prefix}/{model}"
-        return model
+        return MODEL_PROVIDER_MAP.get(model, model)
 
     def _build_body(self, req: AnthropicRequest) -> dict[str, Any]:
         params: dict[str, Any] = {

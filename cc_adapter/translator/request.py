@@ -23,17 +23,17 @@ REASONING_EFFORT_MAX = (
 )
 
 MODEL_PROVIDER_MAP: dict[str, str] = {
-    "deepseek-v4-pro": "deepseek",
-    "deepseek-v4-flash": "deepseek",
-    "kimi-k2-6": "kimi",
-    "kimi-k2-5": "kimi",
-    "glm-5-1": "glm",
-    "glm-5": "glm",
-    "minimax-m2-7": "minimax",
-    "minimax-m2-5": "minimax",
-    "qwen-3-6-max-preview": "qwen",
-    "qwen-3-6-plus": "qwen",
-    "step-3-5-flash": "step",
+    "deepseek-v4-pro": "deepseek/deepseek-v4-pro",
+    "deepseek-v4-flash": "deepseek/deepseek-v4-flash",
+    "kimi-k2-6": "moonshotai/Kimi-K2.6",
+    "kimi-k2-5": "moonshotai/Kimi-K2.5",
+    "glm-5-1": "zai-org/GLM-5.1",
+    "glm-5": "zai-org/GLM-5",
+    "minimax-m2-7": "MiniMaxAI/MiniMax-M2.7",
+    "minimax-m2-5": "MiniMaxAI/MiniMax-M2.5",
+    "qwen-3-6-max-preview": "Qwen/Qwen3.6-Max-Preview",
+    "qwen-3-6-plus": "Qwen/Qwen3.6-Plus",
+    "step-3-5-flash": "stepfun/Step-3.5-Flash",
 }
 
 REASONING_EFFORT_MAP: dict[str, str] = {
@@ -175,12 +175,7 @@ class RequestTranslator:
 
     @staticmethod
     def _normalize_model(model: str) -> str:
-        if "/" in model:
-            return model
-        prefix = MODEL_PROVIDER_MAP.get(model)
-        if prefix:
-            return f"{prefix}/{model}"
-        return model
+        return MODEL_PROVIDER_MAP.get(model, model)
 
     def _build_body(self, req: ChatCompletionRequest, system_prompt: str | None, messages: list) -> dict:
         params: dict[str, Any] = {

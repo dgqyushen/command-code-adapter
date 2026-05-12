@@ -2,7 +2,7 @@ from __future__ import annotations
 
 CC_BASE_HEADERS: dict[str, str] = {
     "Content-Type": "application/json",
-    "x-command-code-version": "0.25.2-adapter",
+    "x-command-code-version": "0.25.2",
     "x-cli-environment": "production",
     "x-project-slug": "adapter",
     "x-internal-team-flag": "false",

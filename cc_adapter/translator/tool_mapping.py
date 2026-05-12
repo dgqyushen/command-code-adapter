@@ -36,12 +36,12 @@ def normalize_schema(schema: dict) -> dict:
     return result
 
 
-def normalize_args(tool_name: str, args: dict) -> dict:
+def normalize_args(tool_name: str, args: dict, map_path: bool = True) -> dict:
     if not isinstance(args, dict):
         return args
     result = {}
     for k, v in args.items():
-        if tool_name.lower() in FILE_TOOLS:
+        if map_path and tool_name.lower() in FILE_TOOLS:
             k = ARGS_PATH_MAP.get(k, k)
         k = ARGS_STR_MAP.get(k, k)
         result[k] = v

@@ -130,11 +130,12 @@ def _format_model_display_name(bare_name: str) -> str:
 @router.get("/models")
 async def list_models():
     models = []
-    for bare_name, provider in MODEL_PROVIDER_MAP.items():
+    for bare_name, canonical_id in MODEL_PROVIDER_MAP.items():
         display_name = _format_model_display_name(bare_name)
+        provider = canonical_id.split("/")[0]
         models.append(
             {
-                "id": f"{provider}/{bare_name}",
+                "id": canonical_id,
                 "name": display_name,
                 "provider": provider,
             }

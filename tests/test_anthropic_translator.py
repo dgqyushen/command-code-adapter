@@ -484,7 +484,10 @@ async def test_stream_with_tool_call():
     assert events[1][0] == "content_block_start"
     assert events[1][1]["content_block"]["type"] == "tool_use"
     assert events[1][1]["content_block"]["name"] == "read"
-    assert events[2][0] == "content_block_stop"
-    assert events[3][0] == "message_delta"
-    assert events[3][1]["delta"]["stop_reason"] == "tool_use"
-    assert events[4][0] == "message_stop"
+    assert events[1][1]["content_block"]["input"] == {}
+    assert events[2][0] == "content_block_delta"
+    assert events[2][1]["delta"] == {"type": "input_json_delta", "partial_json": '{"path":"/tmp/test"}'}
+    assert events[3][0] == "content_block_stop"
+    assert events[4][0] == "message_delta"
+    assert events[4][1]["delta"]["stop_reason"] == "tool_use"
+    assert events[5][0] == "message_stop"
