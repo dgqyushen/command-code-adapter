@@ -52,6 +52,30 @@ docker compose up -d
 
 也可通过 `.env` 文件配置（参考 `.env.example`）。
 
+### 日志
+
+日志格式通过 `CC_ADAPTER_LOG_FORMAT` 控制（默认 `console`）。
+
+**Console 格式**（默认）— 人眼可读的结构化单行日志：
+
+```
+07:42:18 INFO  app.start        base=https://api.commandcode.ai port=8080
+07:42:31 INFO  openai.request   model=deepseek-v4-flash stream=true messages=3 tools=true req=8f3a91c2
+07:42:33 WARN  upstream.retry   reason=empty_response attempt=1 max_attempts=2 req=8f3a91c2
+07:42:34 INFO  upstream.usage   model=deepseek-v4-flash input=120 output=834 total=954 elapsed=2.1s req=8f3a91c2
+07:42:34 INFO  http.done        POST /v1/chat/completions 200 2.48s req=8f3a91c2
+```
+
+**JSON 格式** — 机器解析用结构化格式：
+
+```json
+{"event": "http.done", "level": "info", "logger": "cc_adapter.main", "method": "POST", "path": "/v1/chat/completions", "status_code": 200, "elapsed": "2.480s", "request_id": "8f3a91c2", "timestamp": "2026-05-13T07:42:34Z"}
+```
+
+**事件列表：** `app.start`、`http.done`、`openai.request`、`anthropic.request`、`upstream.error`、`upstream.retry`、`upstream.usage`、`tool.call`、`auth.failed`、`admin.login.failed`、`admin.config.updated`、`admin.verify_key`
+
+**脱敏：** 敏感字段（authorization、API key、messages、tool 编辑参数等）自动替换为 `***`。
+
 ### 使用
 
 ```bash
@@ -175,6 +199,30 @@ docker compose up -d
 | `CC_ADAPTER_DEFAULT_MODEL` | `deepseek/deepseek-v4-flash` | Admin Playground default model |
 
 You can also configure via a `.env` file (see `.env.example`).
+
+### Logging
+
+The log format is controlled by `CC_ADAPTER_LOG_FORMAT` (default: `console`).
+
+**Console format** (default) — human-readable single-line logs:
+
+```
+07:42:18 INFO  app.start        base=https://api.commandcode.ai port=8080
+07:42:31 INFO  openai.request   model=deepseek-v4-flash stream=true messages=3 tools=true req=8f3a91c2
+07:42:33 WARN  upstream.retry   reason=empty_response attempt=1 max_attempts=2 req=8f3a91c2
+07:42:34 INFO  upstream.usage   model=deepseek-v4-flash input=120 output=834 total=954 elapsed=2.1s req=8f3a91c2
+07:42:34 INFO  http.done        POST /v1/chat/completions 200 2.48s req=8f3a91c2
+```
+
+**JSON format** — structured for machine parsing:
+
+```json
+{"event": "http.done", "level": "info", "logger": "cc_adapter.main", "method": "POST", "path": "/v1/chat/completions", "status_code": 200, "elapsed": "2.480s", "request_id": "8f3a91c2", "timestamp": "2026-05-13T07:42:34Z"}
+```
+
+**Event names:** `app.start`, `http.done`, `openai.request`, `anthropic.request`, `upstream.error`, `upstream.retry`, `upstream.usage`, `tool.call`, `auth.failed`, `admin.login.failed`, `admin.config.updated`, `admin.verify_key`
+
+**Redaction:** Sensitive fields (authorization, API keys, messages, tool edit parameters) are automatically replaced with `***`.
 
 ### Usage
 

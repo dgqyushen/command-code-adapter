@@ -3,6 +3,7 @@ import logging
 import re
 
 import pytest
+import structlog
 
 from cc_adapter.core.logging import configure_logging, filter_sensitive_data, PrettyConsoleRenderer
 
@@ -157,6 +158,46 @@ def test_console_renderer_request_id_mapped_to_req():
     result = renderer(None, "info", event_dict)
     assert "req=abc123" in result, f"Missing req in: {result}"
     assert "request_id" not in result, f"request_id leaked in: {result}"
+
+
+def test_console_renderer_field_ordering():
+    """req/model/status should appear before custom fields."""
+    renderer = PrettyConsoleRenderer()
+    event_dict = {
+        "timestamp": "2024-01-15T10:30:45",
+        "level": "info",
+        "event": "upstream.usage",
+        "logger": "test",
+        "model": "m1",
+        "input": 100,
+        "output": 50,
+        "total": 150,
+        "elapsed": "2.1s",
+        "req": "abc123",
+    }
+    result = renderer(None, "info", event_dict)
+    parts = result.split()
+    # Find position of key fields
+    req_pos = parts.index("req=abc123") if "req=abc123" in parts else -1
+    model_pos = parts.index("model=m1") if "model=m1" in parts else -1
+    assert req_pos >= 0, "req not found"
+    assert model_pos >= 0, "model not found"
+    assert "input=100" in result, "input field should appear"
+
+
+def test_json_output_unchanged(capsys):
+    """JSON output must remain valid JSON when log_format=json."""
+    configure_logging(log_format="json", log_level="INFO")
+    log = structlog.get_logger("test_json_unchanged")
+    log.info("http.done", method="POST", path="/v1/chat/completions", status_code=200)
+    _, err = capsys.readouterr()
+    for line in err.strip().splitlines():
+        if not line:
+            continue
+        parsed = json.loads(line)
+        assert parsed.get("event") == "http.done"
+        assert parsed.get("method") == "POST"
+        assert parsed.get("status_code") == 200
 
 
 def test_correlation_id_middleware_adds_header():

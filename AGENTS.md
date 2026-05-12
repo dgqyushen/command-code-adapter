@@ -30,6 +30,7 @@ docker compose up -d              # compose.yml + optional compose.override.yml
 | `CC_ADAPTER_DEFAULT_MODEL` | `default_model` | default `deepseek/deepseek-v4-flash` |
 | `CC_ADAPTER_PORT` | `port` | default `8080` |
 | `CC_ADAPTER_ADMIN_PASSWORD` | `admin_password` | Admin login password |
+| `CC_ADAPTER_LOG_FORMAT` | `log_format` | `console` or `json`, default `console` |
 
 All fields in `core/config.py:AppConfig`. Uses `.env` file. Config loaded eagerly at module import time.
 
