@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+import structlog
 import time
-import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Header
@@ -19,7 +19,7 @@ from cc_adapter.command_code.headers import make_cc_headers
 from cc_adapter.core.utils import normalize_api_keys, is_deepseek_v4_model
 
 router = APIRouter(prefix="/admin/api")
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 _start_time = time.time()
 
 
@@ -66,14 +66,14 @@ def _apply_config_fields(cfg: AppConfig, updates: dict[str, object]) -> bool:
 async def verify_auth(authorization: str | None = Header(None)):
     cfg = get_config()
     if not cfg or not cfg.admin_password:
-        logger.warning("Admin auth blocked: CC_ADAPTER_ADMIN_PASSWORD is not configured")
+        logger.warning("auth.failed", reason="admin_password_not_configured")
         raise HTTPException(status_code=503, detail="Admin password is not configured")
     if not authorization or not authorization.startswith("Bearer "):
-        logger.warning("Admin auth failed: missing or malformed Authorization header")
+        logger.warning("auth.failed", reason="missing_or_malformed_auth_header")
         raise HTTPException(status_code=401, detail="Unauthorized")
     token = authorization[7:]
     if not validate_token(token):
-        logger.warning("Admin auth failed: invalid token")
+        logger.warning("auth.failed", reason="invalid_admin_token")
         raise HTTPException(status_code=401, detail="Unauthorized")
     return True
 
@@ -84,7 +84,7 @@ async def login(req: LoginRequest):
     if not cfg or not cfg.admin_password:
         raise HTTPException(status_code=503, detail="Admin password is not configured")
     if req.password != cfg.admin_password:
-        logger.warning("Admin login failed: invalid password")
+        logger.warning("admin.login.failed", reason="invalid_password")
         raise HTTPException(status_code=401, detail="Invalid password")
     token = generate_token()
     return LoginResponse(token=token)
@@ -183,7 +183,9 @@ async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
 async def verify_key(_=Depends(verify_auth)):
     cfg = get_config()
     if not cfg or not _primary_api_key(cfg.cc_api_key):
-        return {"valid": False, "message": "No API Key configured"}
+        result = {"valid": False, "message": "No API Key configured"}
+        logger.info("admin.verify_key", valid=result["valid"])
+        return result
     test_client = CommandCodeClient(
         base_url=cfg.cc_base_url,
         api_key=_primary_api_key(cfg.cc_api_key),
@@ -207,11 +209,13 @@ async def verify_key(_=Depends(verify_auth)):
         headers = make_cc_headers()
         async for _ in test_client.generate(test_body, headers):
             break
-        return {"valid": True, "message": "API Key is valid"}
+        result = {"valid": True, "message": "API Key is valid"}
     except Exception as e:
-        return {"valid": False, "message": str(e)}
+        result = {"valid": False, "message": str(e)}
     finally:
         await test_client.aclose()
+    logger.info("admin.verify_key", valid=result["valid"])
+    return result
 
 
 @router.post("/usage/query")
@@ -300,3 +304,4 @@ async def _apply_config_update(update: ConfigUpdate) -> None:
         old = _recreate_client(cfg)
         if old is not None:
             await old.aclose()
+    logger.info("admin.config.updated", fields=list(update_dict.keys()))
