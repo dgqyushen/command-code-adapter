@@ -116,27 +116,36 @@ poetry run pytest
 ```
 cc_adapter/
 ├── main.py                # FastAPI 应用入口与路由
-├── config.py              # 配置管理（pydantic-settings）
-├── models/                # Pydantic 数据模型
-│   ├── openai.py          #   OpenAI ChatCompletions 格式
-│   └── command_code.py    #   Command Code API 格式
-├── openai/                # OpenAI 兼容翻译
-│   ├── request.py         #   OpenAI → CC
-│   └── response.py        #   CC → OpenAI
-├── anthropic/             # Anthropic 兼容翻译
-│   ├── request.py         #   Anthropic → CC
-│   └── response.py        #   CC → Anthropic
-├── _shared.py             # 共享常量 (MODEL_PROVIDER_MAP 等)
-├── _body.py               # 共享 CC body 构造
-├── client.py              # CC API HTTP 客户端
-├── errors.py              # 错误处理与状态码映射
+├── core/                  # 基础设施
+│   ├── config.py          #   配置管理（pydantic-settings）
+│   ├── errors.py          #   错误处理与状态码映射
+│   ├── logging.py         #   日志配置与中间件
+│   ├── auth.py            #   认证逻辑（HMAC token）
+│   ├── runtime.py         #   运行时单例（config/client/translator）
+│   └── utils.py           #   工具函数
+├── command_code/          # CC API 客户端
+│   ├── client.py          #   HTTP 客户端
+│   ├── headers.py         #   请求头构造
+│   └── body.py            #   请求体构造
+├── providers/             # 协议翻译
+│   ├── openai/            #   OpenAI 兼容
+│   │   ├── router.py      #   POST /v1/chat/completions
+│   │   ├── models.py      #   数据模型
+│   │   ├── request.py     #   OpenAI → CC
+│   │   └── response.py    #   CC → OpenAI
+│   ├── anthropic/         #   Anthropic 兼容
+│   │   ├── router.py      #   POST /v1/messages
+│   │   ├── models.py      #   数据模型
+│   │   ├── request.py     #   Anthropic → CC
+│   │   └── response.py    #   CC → Anthropic
+│   └── shared/            #   共享工具
+│       ├── model_mapping.py  # 模型名映射
+│       └── tool_mapping.py   # 工具参数名映射
+├── catalog/               # 数据目录
+│   └── models_data.py     #   模型列表
 └── admin/                 # Web 管理面板
-    ├── router.py          #   REST API 端点
-    ├── auth.py            #   认证逻辑
-    └── static/            #   前端静态文件
-        ├── index.html
-        ├── admin.css
-        └── admin.js
+    └── ...                #   管理界面
+```
 ```
 
 ### 许可证
@@ -257,26 +266,36 @@ poetry run pytest
 ```
 cc_adapter/
 ├── main.py                # FastAPI app entry & routes
-├── config.py              # Configuration (pydantic-settings)
-├── models/                # Pydantic data models
-│   ├── openai.py          #   OpenAI ChatCompletions format
-│   └── command_code.py    #   Command Code API format
-├── openai/                # OpenAI-compatible translation
-│   ├── request.py         #   OpenAI → CC
-│   └── response.py        #   CC → OpenAI
-├── anthropic/             # Anthropic-compatible translation
-│   ├── request.py         #   Anthropic → CC
-│   └── response.py        #   CC → Anthropic
-├── _shared.py             # Shared constants (MODEL_PROVIDER_MAP, etc.)
-├── _body.py               # Shared CC body builder
-├── client.py              # CC API HTTP client
-├── errors.py              # Error handling & status code mapping
+├── core/                  # Infrastructure
+│   ├── config.py          #   Configuration (pydantic-settings)
+│   ├── errors.py          #   Error handling & status code mapping
+│   ├── logging.py         #   Logging & middleware
+│   ├── auth.py            #   Auth (HMAC token)
+│   ├── runtime.py         #   Runtime singletons
+│   └── utils.py           #   Utility functions
+├── command_code/          # CC API client
+│   ├── client.py          #   HTTP client
+│   ├── headers.py         #   Request headers
+│   └── body.py            #   Request body builder
+├── providers/             # Protocol translators
+│   ├── openai/            #   OpenAI-compatible
+│   │   ├── router.py      #   POST /v1/chat/completions
+│   │   ├── models.py      #   Data models
+│   │   ├── request.py     #   OpenAI → CC
+│   │   └── response.py    #   CC → OpenAI
+│   ├── anthropic/         #   Anthropic-compatible
+│   │   ├── router.py      #   POST /v1/messages
+│   │   ├── models.py      #   Data models
+│   │   ├── request.py     #   Anthropic → CC
+│   │   └── response.py    #   CC → Anthropic
+│   └── shared/            #   Shared utilities
+│       ├── model_mapping.py  # Model name mapping
+│       └── tool_mapping.py   # Tool param name mapping
+├── catalog/               # Data directory
+│   └── models_data.py     #   Model listings
 └── admin/                 # Web admin panel
-    ├── router.py          #   REST API endpoints
-    ├── auth.py            #   Authentication logic
-    └── static/            #   Frontend static files
-        ├── index.html
-        ├── admin.css
+    └── ...                #   Admin interface
+```
         └── admin.js
 ```
 

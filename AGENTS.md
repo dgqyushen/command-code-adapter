@@ -31,7 +31,7 @@ docker compose up -d              # compose.yml + optional compose.override.yml
 | `CC_ADAPTER_PORT` | `port` | default `8080` |
 | `CC_ADAPTER_ADMIN_PASSWORD` | `admin_password` | Admin login password |
 
-All fields in `core/config.py:AppConfig`. Uses `.env` file. Config loaded lazily via `core/runtime.py`.
+All fields in `core/config.py:AppConfig`. Uses `.env` file. Config loaded eagerly at module import time.
 
 ## Architecture
 
@@ -53,7 +53,7 @@ POST /v1/messages                     POST /v1/chat/completions
 - **Model canonical IDs**: `MODEL_PROVIDER_MAP` in `providers/shared/model_mapping.py` maps bare names (e.g. `step-3-5-flash`) to full CC API IDs (`stepfun/Step-3.5-Flash`). Unknown models pass through unchanged.
 - **Unsupported params silently dropped**: `top_p`, `stop`, `n`, `presence_penalty`, `frequency_penalty`, `user`, `response_format`.
 - **System prompt** extracted from messages, passed as top-level `system` field.
-- **`tool` role messages** rewritten to `user` role with `tool-call`/`tool-result` content blocks.
+- **`tool` role messages** kept as `tool` role with `tool-call`/`tool-result` content blocks.
 - **Tool param mapping**: `filePath`/`oldString`/`newString` ↔ `path`/`old_str`/`new_str` in `providers/shared/tool_mapping.py`.
 - **`reasoning_effort`**: deepseek-v4 models map `xhigh`/`max` → `max` with special verbose prompt (`REASONING_EFFORT_MAX`). Other models get simple instruction injection.
 
