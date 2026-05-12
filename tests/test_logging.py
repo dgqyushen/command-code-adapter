@@ -1,10 +1,11 @@
 import io
 import json
 import logging
+import re
 
 import pytest
 
-from cc_adapter.core.logging import configure_logging, filter_sensitive_data
+from cc_adapter.core.logging import configure_logging, filter_sensitive_data, PrettyConsoleRenderer
 
 
 def test_configure_logging_json_output(capsys):
@@ -66,6 +67,97 @@ def test_filter_sensitive_data_redacts_nested():
     result = filter_sensitive_data(None, "info", event)
     assert result["input"]["filePath"] == "***"
     assert result["input"]["oldString"] == "***"
+
+
+def test_filter_sensitive_data_redacts_authorization():
+    event = {
+        "event": "api call",
+        "authorization": "Bearer secret-token",
+        "x-api-key": "my-api-key",
+        "api_key": "another-key",
+        "token": "some-token",
+    }
+    result = filter_sensitive_data(None, "info", event)
+    assert result["authorization"] == "***"
+    assert result["x-api-key"] == "***"
+    assert result["api_key"] == "***"
+    assert result["token"] == "***"
+
+
+def test_filter_sensitive_data_redacts_messages():
+    event = {
+        "event": "chat",
+        "messages": [{"role": "user", "content": "hello"}],
+        "content": "some text",
+    }
+    result = filter_sensitive_data(None, "info", event)
+    assert result["messages"] == "***"
+    assert result["content"] == "***"
+
+
+def test_filter_sensitive_data_recursive_list():
+    event = {
+        "event": "tool result",
+        "results": [
+            {"filePath": "/src/main.py", "oldString": "foo"},
+            {"filePath": "/src/lib.py", "newString": "bar"},
+        ],
+    }
+    result = filter_sensitive_data(None, "info", event)
+    assert result["results"][0]["filePath"] == "***"
+    assert result["results"][0]["oldString"] == "***"
+    assert result["results"][1]["filePath"] == "***"
+    assert result["results"][1]["newString"] == "***"
+
+
+def test_filter_sensitive_data_case_insensitive():
+    event = {
+        "event": "api call",
+        "Authorization": "Bearer secret",
+        "X-Api-Key": "key123",
+    }
+    result = filter_sensitive_data(None, "info", event)
+    assert result["Authorization"] == "***"
+    assert result["X-Api-Key"] == "***"
+
+
+def test_console_renderer_output_format():
+    renderer = PrettyConsoleRenderer()
+    event_dict = {
+        "timestamp": "2024-01-15T10:30:45",
+        "level": "info",
+        "event": "http.done",
+        "logger": "test",
+        "method": "GET",
+        "path": "/health",
+        "status_code": 200,
+        "elapsed": "0.123s",
+        "extra_field": "value",
+    }
+    result = renderer(None, "info", event_dict)
+    assert re.search(r"\d{2}:\d{2}:\d{2}", result), f"Missing timestamp in: {result}"
+    assert "INFO" in result, f"Missing level in: {result}"
+    assert "http.done" in result, f"Missing event in: {result}"
+    assert "method=GET" in result, f"Missing method in: {result}"
+    assert "path=/health" in result, f"Missing path in: {result}"
+    assert "status_code=200" in result, f"Missing status_code in: {result}"
+    assert "elapsed=0.123s" in result, f"Missing elapsed in: {result}"
+    assert "extra_field=value" in result, f"Missing extra_field in: {result}"
+
+
+def test_console_renderer_request_id_mapped_to_req():
+    renderer = PrettyConsoleRenderer()
+    event_dict = {
+        "timestamp": "2024-01-15T10:30:45",
+        "level": "info",
+        "event": "http.done",
+        "logger": "test",
+        "method": "GET",
+        "request_id": "abc123",
+    }
+    result = renderer(None, "info", event_dict)
+    assert "req=abc123" in result, f"Missing req in: {result}"
+    assert "request_id" not in result, f"request_id leaked in: {result}"
 
 
 def test_correlation_id_middleware_adds_header():
