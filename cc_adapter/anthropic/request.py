@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import copy
-import datetime
 import logging
 from typing import Any
 
@@ -9,40 +7,11 @@ from cc_adapter.anthropic.models import AnthropicRequest
 from cc_adapter.headers import make_cc_headers
 from cc_adapter._shared import MODEL_PROVIDER_MAP
 from cc_adapter._tool_mapping import normalize_input_args, normalize_schema
+from cc_adapter._body import _make_config, make_cc_body
 
 logger = logging.getLogger(__name__)
 
 _NOT_SUPPORTED = {"top_p", "top_k", "stop_sequences"}
-
-_CC_BODY_SKELETON: dict[str, Any] = {
-    "memory": "",
-    "taste": None,
-    "skills": None,
-    "permissionMode": "standard",
-}
-
-
-_STATIC_CONFIG = {
-    "env": "adapter",
-    "workingDir": "/home/user/project",
-    "environment": "production",
-    "structure": ["src/", "tests/", "docs/"],
-    "isGitRepo": True,
-    "currentBranch": "main",
-    "mainBranch": "main",
-    "gitStatus": "clean",
-    "recentCommits": [],
-}
-
-
-def _make_config() -> dict[str, Any]:
-    base = copy.deepcopy(_STATIC_CONFIG)
-    base["date"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    return base
-
-
-def _make_cc_body(params: dict[str, Any]) -> dict[str, Any]:
-    return {**_CC_BODY_SKELETON, "config": _make_config(), "params": params}
 
 
 def _budget_to_effort(budget: int | None) -> str:
@@ -118,7 +87,7 @@ class AnthropicTranslator:
         if req.temperature is not None:
             params["temperature"] = req.temperature
 
-        return _make_cc_body(params)
+        return make_cc_body(config=_make_config(), params=params)
 
     def _build_messages(self, messages) -> list[dict[str, Any]]:
         tool_names: dict[str, str] = {}

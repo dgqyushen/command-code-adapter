@@ -37,29 +37,29 @@ All fields in `config.py:AppConfig`. Uses `.env` file. Config loaded lazily as m
 
 ```
 POST /v1/messages                     POST /v1/chat/completions
-  → anthropic/                          → translator/ (OpenAI)
+  → anthropic/                          → openai/ (OpenAI)
       request.py (Anthropic→CC)           request.py (OpenAI→CC)
       response.py (CC→Anthropic)           response.py (CC→OpenAI)
   → CommandCodeClient.generate()        → CommandCodeClient.generate()
 ```
 
-- **Two independent translators**: `anthropic/` and `translator/` share no code.
+- **Two translators** in `anthropic/` and `openai/`; shared utilities in `_shared.py`, `_tool_mapping.py`, `_body.py`.
 - **Singletons**: `_config`, `_cc_client`, `_request_translator` in `main.py`; admin can swap via `admin/state.py:init()`.
 - **Retry**: Both paths retry once on empty upstream response.
 - **Admin auth**: HMAC-signed token (not JWT); embeds `exp` + password hash prefix.
 
 ## Translation quirks — OpenAI
 
-- **Model canonical IDs**: `MODEL_PROVIDER_MAP` in `translator/request.py` maps bare names (e.g. `step-3-5-flash`) to full CC API IDs (`stepfun/Step-3.5-Flash`). Unknown models pass through unchanged.
+- **Model canonical IDs**: `MODEL_PROVIDER_MAP` in `cc_adapter/_shared.py` maps bare names (e.g. `step-3-5-flash`) to full CC API IDs (`stepfun/Step-3.5-Flash`). Unknown models pass through unchanged.
 - **Unsupported params silently dropped**: `top_p`, `stop`, `n`, `presence_penalty`, `frequency_penalty`, `user`, `response_format`.
 - **System prompt** extracted from messages, passed as top-level `system` field.
 - **`tool` role messages** rewritten to `user` role with `tool-call`/`tool-result` content blocks.
-- **Tool param mapping**: `filePath`/`oldString`/`newString` ↔ `path`/`old_str`/`new_str` in `translator/tool_mapping.py`.
+- **Tool param mapping**: `filePath`/`oldString`/`newString` ↔ `path`/`old_str`/`new_str` in `cc_adapter/_tool_mapping.py`.
 - **`reasoning_effort`**: deepseek-v4 models map `xhigh`/`max` → `max` with special verbose prompt (`REASONING_EFFORT_MAX`). Other models get simple instruction injection.
 
 ## Translation quirks — Anthropic
 
-- **Completely independent** from OpenAI translator — own models, request, response files under `cc_adapter/anthropic/`.
+- **Independent translator** — own models, request, response under `cc_adapter/anthropic/`; imports `_tool_mapping.py`, `_shared.py`.
 - **thinking.budget_tokens** → `reasoning_effort`: <4K=low, <8K=medium, <16K=high, >=16K=xhigh.
 - **Content blocks**: `tool_use` → `tool-call`, `tool_result` → `tool-result`, `image` → warn+skip, `thinking` → pass.
 - **Auth**: `x-api-key` or `Authorization: Bearer`.

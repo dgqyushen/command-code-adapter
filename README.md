@@ -120,10 +120,14 @@ cc_adapter/
 ├── models/                # Pydantic 数据模型
 │   ├── openai.py          #   OpenAI ChatCompletions 格式
 │   └── command_code.py    #   Command Code API 格式
-├── translator/            # 请求/响应格式转换
+├── openai/                # OpenAI 兼容翻译
 │   ├── request.py         #   OpenAI → CC
-│   ├── response.py        #   CC → OpenAI
-│   └── tool_mapping.py    #   工具参数名双向映射
+│   └── response.py        #   CC → OpenAI
+├── anthropic/             # Anthropic 兼容翻译
+│   ├── request.py         #   Anthropic → CC
+│   └── response.py        #   CC → Anthropic
+├── _shared.py             # 共享常量 (MODEL_PROVIDER_MAP 等)
+├── _body.py               # 共享 CC body 构造
 ├── client.py              # CC API HTTP 客户端
 ├── errors.py              # 错误处理与状态码映射
 └── admin/                 # Web 管理面板
@@ -257,10 +261,14 @@ cc_adapter/
 ├── models/                # Pydantic data models
 │   ├── openai.py          #   OpenAI ChatCompletions format
 │   └── command_code.py    #   Command Code API format
-├── translator/            # Request/response format conversion
+├── openai/                # OpenAI-compatible translation
 │   ├── request.py         #   OpenAI → CC
-│   ├── response.py        #   CC → OpenAI
-│   └── tool_mapping.py    #   Bidirectional tool parameter mapping
+│   └── response.py        #   CC → OpenAI
+├── anthropic/             # Anthropic-compatible translation
+│   ├── request.py         #   Anthropic → CC
+│   └── response.py        #   CC → Anthropic
+├── _shared.py             # Shared constants (MODEL_PROVIDER_MAP, etc.)
+├── _body.py               # Shared CC body builder
 ├── client.py              # CC API HTTP client
 ├── errors.py              # Error handling & status code mapping
 └── admin/                 # Web admin panel
