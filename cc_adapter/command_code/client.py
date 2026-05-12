@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import structlog
 from typing import AsyncGenerator, Any
 
 import httpx
@@ -9,7 +10,7 @@ import httpx
 from cc_adapter.core.errors import map_upstream_error, AuthenticationError, TimeoutError_, UpstreamError
 from cc_adapter.command_code.headers import make_cc_headers
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _parse_sse_line(raw: str) -> dict[str, Any] | None:
@@ -25,11 +26,11 @@ def _parse_sse_line(raw: str) -> dict[str, Any] | None:
         parsed = json.loads(line)
     except ValueError as e:
         preview = raw[:60]
-        logger.warning("Failed to parse CC event line %r: %s", preview, e)
+        logger.debug("Failed to parse CC event line %r: %s", preview, e)
         return None
     if not isinstance(parsed, dict):
         preview = raw[:60]
-        logger.warning("Failed to parse CC event line %r: not a JSON object", preview)
+        logger.debug("Failed to parse CC event line %r: not a JSON object", preview)
         return None
     logger.debug("CC raw event: type=%s", parsed.get("type", "?"))
     return parsed
@@ -100,7 +101,7 @@ class CommandCodeClient:
                 if response.is_error:
                     error_body = await response.aread()
                     text = error_body.decode() if error_body else response.reason_phrase or "Unknown error"
-                    logger.warning("CC API error: status=%d body=%s", response.status_code, text[:500])
+                    logger.warning("upstream.error", status_code=response.status_code, error_type="cc_api_error")
                     raise map_upstream_error(response.status_code, text)
 
                 async for line in response.aiter_lines():
@@ -109,8 +110,8 @@ class CommandCodeClient:
                         yield parsed
 
         except httpx.TimeoutException:
-            logger.warning("CC API request timed out (url=%s)", url)
+            logger.warning("upstream.error", error_type="timeout", url=url)
             raise TimeoutError_("Command Code API request timed out")
         except httpx.RequestError as e:
-            logger.warning("CC API request failed: %s url=%s", e.__class__.__name__, url)
+            logger.warning("upstream.error", error_type=e.__class__.__name__, url=url)
             raise UpstreamError(f"Command Code API request failed: {e.__class__.__name__}")

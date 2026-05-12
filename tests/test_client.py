@@ -45,33 +45,24 @@ def test_client_ignores_done_and_empty_lines():
     assert [event["type"] for event in events if event is not None] == ["text-delta"]
 
 
-def test_client_logs_invalid_lines(caplog):
-    """Invalid lines are logged with a short preview."""
-    import logging
-
-    caplog.set_level(logging.WARNING)
+def test_client_logs_invalid_lines():
+    """Invalid lines are skipped silently (logged at debug level)."""
     lines = [
         "not json at all",
         'data: {"type":"valid"}',
         "{broken",
     ]
 
-    for raw in lines:
-        _parse_sse_line(raw)
+    results = [_parse_sse_line(raw) for raw in lines]
+    # non-json lines return None; valid line returns parsed dict
+    assert results[0] is None
+    assert results[1] is not None
+    assert results[2] is None
 
-    assert len(caplog.records) >= 1
-    # Should mention the invalid content in the log message
-    assert any("not json" in r.message for r in caplog.records)
 
-
-def test_client_rejects_non_object_json(caplog):
+def test_client_rejects_non_object_json():
     """A valid JSON value that is not an event object is ignored."""
-    import logging
-
-    caplog.set_level(logging.WARNING)
-
     assert _parse_sse_line('data: ["not", "an", "event"]') is None
-    assert any("not a JSON object" in r.message for r in caplog.records)
 
 
 @pytest.mark.asyncio
