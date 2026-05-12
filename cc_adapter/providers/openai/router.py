@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 
+import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -14,7 +14,7 @@ from cc_adapter.core.runtime import get_config, get_client, get_request_translat
 from cc_adapter.providers.openai.models import ChatCompletionRequest
 from cc_adapter.providers.openai.response import translate_stream, collect_and_translate_nonstream
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -149,6 +149,7 @@ async def _nonstream_with_retry(
 
 @router.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest, request: Request):
+    structlog.contextvars.bind_contextvars(protocol="openai")
     cfg = get_config()
     if cfg and cfg.access_key:
         auth = request.headers.get("Authorization", "")
@@ -157,7 +158,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
             if cfg.admin_password and validate_token(token):
                 pass
             else:
-                logger.warning("Authentication failed: invalid access key")
+                logger.warning("auth.failed", reason="invalid_access_key")
                 return JSONResponse(
                     status_code=401,
                     content={
@@ -173,12 +174,12 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
         cfg = AppConfig()
 
     logger.info(
-        "Request: model=%s stream=%s messages=%d tools=%s tool_choice=%s",
-        req.model,
-        req.stream,
-        len(req.messages),
-        "yes" if req.tools else "no",
-        req.tool_choice,
+        "openai.request",
+        model=req.model,
+        stream=str(req.stream),
+        messages=len(req.messages),
+        tools="yes" if req.tools else "no",
+        tool_choice=req.tool_choice,
     )
 
     translator = get_request_translator()

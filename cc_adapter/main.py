@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import structlog
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,7 +19,7 @@ from cc_adapter.providers.anthropic.router import router as anthropic_router
 from cc_adapter.admin import router as admin_router
 from cc_adapter.catalog.models_data import MODELS_DATA
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
@@ -27,10 +27,9 @@ async def lifespan(app: FastAPI):
     cfg = get_config() or AppConfig()
     configure_logging(log_format=cfg.log_format, log_level=cfg.log_level)
     set_password(cfg.admin_password)
-    logger.info("CC Adapter starting — CC API: %s", cfg.cc_base_url)
-    logger.info("Admin panel: http://%s:%s/admin/", cfg.host if cfg.host != "0.0.0.0" else "localhost", cfg.port)
+    logger.info("app.start", base=cfg.cc_base_url, port=cfg.port)
     if not cfg.cc_api_key:
-        logger.warning("CC_ADAPTER_CC_API_KEY is not set. Set it via environment variable or .env file.")
+        logger.warning("app.start", message="CC_ADAPTER_CC_API_KEY is not set")
     yield
     cc_client = get_runtime_client()
     if cc_client is not None:
@@ -66,7 +65,7 @@ async def list_models():
 
 @app.exception_handler(AdapterError)
 async def adapter_error_handler(request: Request, exc: AdapterError):
-    logger.error("AdapterError: %s (status=%d)", exc.message, exc.status_code)
+    logger.error("http.error", error=exc.message, status_code=exc.status_code)
     return JSONResponse(status_code=exc.status_code, content=exc.to_openai_error())
 
 

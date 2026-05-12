@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-import logging
 import uuid
 import time
 from typing import AsyncGenerator
+
+import structlog
 
 from cc_adapter.providers.openai.models import (
     ChatCompletionResponse,
@@ -19,7 +20,7 @@ from cc_adapter.providers.openai.models import (
 from cc_adapter.core.errors import AdapterError, map_upstream_error
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 FINISH_REASON_MAP = {
     "end_turn": "stop",
@@ -78,12 +79,12 @@ def _parse_usage(raw_usage: dict | None, model: str, start_time: float) -> Usage
     )
     elapsed = time.time() - start_time
     logger.info(
-        "Usage: model=%s input=%d output=%d total=%d elapsed=%.1fs",
-        model,
-        usage.prompt_tokens,
-        usage.completion_tokens,
-        usage.total_tokens,
-        elapsed,
+        "upstream.usage",
+        model=model,
+        input=usage.prompt_tokens,
+        output=usage.completion_tokens,
+        total=usage.total_tokens,
+        elapsed=f"{elapsed:.1f}s",
     )
     return usage
 
@@ -96,7 +97,7 @@ def _event_error(event: dict) -> AdapterError:
     err_data = event.get("error") or {}
     message = err_data.get("message") or "Unknown error"
     status_code = err_data.get("statusCode") or 502
-    logger.error("CC stream error: %s", message)
+    logger.warning("upstream.error", error=message)
     return map_upstream_error(status_code, message)
 
 
@@ -154,9 +155,9 @@ async def translate_stream(
                 logger.debug("CC tool-call event: %s", event)
                 tool_call = _make_tool_call(event, tool_call_index, include_index=True)
                 logger.info(
-                    "Translated tool-call: id=%s name=%s",
-                    tool_call.id,
-                    tool_call.function.name,
+                    "tool.call",
+                    tool_id=tool_call.id,
+                    tool_name=tool_call.function.name,
                 )
                 tc_dict = {
                     "index": tool_call.index,
@@ -190,7 +191,7 @@ async def translate_stream(
                 yield f"data: {json.dumps(_stream_error_payload(error))}\n\n"
                 break
     except AdapterError as e:
-        logger.error("Stream error from CC API: %s", e.message)
+        logger.warning("upstream.error", error=e.message)
         yield f"data: {json.dumps(_stream_error_payload(e))}\n\n"
 
     yield "data: [DONE]\n\n"
@@ -226,9 +227,9 @@ async def collect_and_translate_nonstream(
             logger.debug("CC tool-call event (nonstream): %s", event)
             tc = _make_tool_call(event, tool_call_index)
             logger.info(
-                "Translated tool-call (nonstream): id=%s name=%s",
-                tc.id,
-                tc.function.name,
+                "tool.call",
+                tool_id=tc.id,
+                tool_name=tc.function.name,
             )
             tool_calls.append(tc)
             tool_call_index += 1
