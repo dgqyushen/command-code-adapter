@@ -12,13 +12,21 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 
-SENSITIVE_TOOL_FIELDS = {"oldString", "newString", "filePath", "old_str", "new_str", "path"}
-
 SENSITIVE_KEYS = {
-    "authorization", "x-api-key", "api_key", "token",
-    "cookie", "set-cookie",
-    "messages", "content",
-    "oldstring", "newstring", "filepath", "old_str", "new_str", "path",
+    "authorization",
+    "x-api-key",
+    "api_key",
+    "token",
+    "cookie",
+    "set-cookie",
+    "messages",
+    "content",
+    "oldstring",
+    "newstring",
+    "filepath",
+    "old_str",
+    "new_str",
+    "path",
 }
 SENSITIVE_KEYS_LOWER = {k.lower() for k in SENSITIVE_KEYS}
 
@@ -52,8 +60,15 @@ _shared_processors: list[Any] = [
 
 class PrettyConsoleRenderer:
     _FIELD_PRIORITY = [
-        "event", "req", "model", "method", "path",
-        "status_code", "elapsed", "attempt", "error_type",
+        "event",
+        "req",
+        "model",
+        "method",
+        "path",
+        "status_code",
+        "elapsed",
+        "attempt",
+        "error_type",
     ]
 
     _LEVEL_COLORS = {

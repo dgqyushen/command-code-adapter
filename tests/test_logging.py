@@ -1,4 +1,3 @@
-import io
 import json
 import logging
 import re
@@ -11,7 +10,7 @@ from cc_adapter.core.logging import configure_logging, filter_sensitive_data, Pr
 def test_configure_logging_json_output(capsys):
     configure_logging(log_format="json", log_level="INFO")
     logging.getLogger("test_json").info("hello json")
-    out, err = capsys.readouterr()
+    _, err = capsys.readouterr()
     lines = err.strip().splitlines()
     for line in lines:
         if "hello json" in line:
@@ -30,7 +29,7 @@ def test_configure_logging_level_respected(capsys):
     logging.getLogger("test_level").debug("should not appear")
     logging.getLogger("test_level").info("should not appear")
     logging.getLogger("test_level").warning("should appear")
-    out, err = capsys.readouterr()
+    _, err = capsys.readouterr()
     assert "should appear" in err
     assert "should not appear" not in err
 
