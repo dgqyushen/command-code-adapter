@@ -63,6 +63,11 @@ async def lifespan(app: FastAPI):
     if not cfg.cc_api_key:
         logger.warning("CC_ADAPTER_CC_API_KEY is not set. Set it via environment variable or .env file.")
     yield
+    admin_client = get_admin_client()
+    if admin_client is not None and admin_client is not _cc_client:
+        await admin_client.aclose()
+    if _cc_client is not None:
+        await _cc_client.aclose()
 
 
 app = FastAPI(title="Command Code Adapter", version="0.1.0", lifespan=lifespan)

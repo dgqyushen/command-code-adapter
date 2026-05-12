@@ -121,6 +121,9 @@ async def translate_anthropic_stream(
         event_type = event.get("type")
 
         if event_type == "reasoning-delta":
+            text = event.get("text", "")
+            if not text:
+                continue
             if not has_started:
                 yield _anthropic_sse(
                     "message_start",
@@ -153,19 +156,20 @@ async def translate_anthropic_stream(
                     },
                 )
                 in_thinking = True
-            text = event.get("text", "")
-            if text:
-                has_content = True
-                yield _anthropic_sse(
-                    "content_block_delta",
-                    {
-                        "type": "content_block_delta",
-                        "index": content_index,
-                        "delta": {"type": "thinking_delta", "thinking": text},
-                    },
-                )
+            has_content = True
+            yield _anthropic_sse(
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": content_index,
+                    "delta": {"type": "thinking_delta", "thinking": text},
+                },
+            )
 
         elif event_type == "text-delta":
+            text = event.get("text", "")
+            if not text:
+                continue
             if not has_started:
                 yield _anthropic_sse(
                     "message_start",
@@ -198,17 +202,15 @@ async def translate_anthropic_stream(
                     },
                 )
                 in_text = True
-            text = event.get("text", "")
-            if text:
-                has_content = True
-                yield _anthropic_sse(
-                    "content_block_delta",
-                    {
-                        "type": "content_block_delta",
-                        "index": content_index,
-                        "delta": {"type": "text_delta", "text": text},
-                    },
-                )
+            has_content = True
+            yield _anthropic_sse(
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": content_index,
+                    "delta": {"type": "text_delta", "text": text},
+                },
+            )
 
         elif event_type == "tool-call":
             if not has_started:

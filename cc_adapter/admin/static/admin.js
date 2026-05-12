@@ -185,17 +185,29 @@ async function api(method, path, body) {
 }
 
 // Auth
-function showLogin() {
+function showLogin(message) {
   token = null;
   localStorage.removeItem("cc-admin-token");
   document.getElementById("login-overlay").classList.remove("hidden");
-  document.getElementById("login-error").classList.add("hidden");
+  const errEl = document.getElementById("login-error");
+  if (message) {
+    errEl.textContent = message;
+    errEl.classList.remove("hidden");
+  } else {
+    errEl.classList.add("hidden");
+  }
 }
 
 async function doLogin() {
   const pw = document.getElementById("login-password").value;
   const resp = await api("POST", "/admin/api/login", { password: pw });
   if (resp.status === 401) {
+    showLogin(t("loginError"));
+    return;
+  }
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    document.getElementById("login-error").textContent = data.detail || `Error ${resp.status}`;
     document.getElementById("login-error").classList.remove("hidden");
     return;
   }
@@ -790,7 +802,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const resp = await fetch("/admin/api/health", {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (resp.status === 401) showLogin();
-    else { renderAll(); }
+    if (resp.status === 401) {
+      showLogin();
+    } else if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      showLogin(data.detail || `Server error (${resp.status})`);
+    } else {
+      renderAll();
+    }
   })();
 });

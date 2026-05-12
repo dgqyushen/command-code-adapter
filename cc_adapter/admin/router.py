@@ -160,7 +160,7 @@ async def get_reasoning_effort_config(_=Depends(verify_auth)):
 @router.put("/config")
 async def update_config(update: ConfigUpdate, _=Depends(verify_auth)):
     _update_env_file(update)
-    _apply_config_update(update)
+    await _apply_config_update(update)
     return await get_config_endpoint()
 
 
@@ -202,6 +202,8 @@ async def verify_key(_=Depends(verify_auth)):
         return {"valid": True, "message": "API Key is valid"}
     except Exception as e:
         return {"valid": False, "message": str(e)}
+    finally:
+        await test_client.aclose()
 
 
 @router.post("/usage/query")
@@ -265,15 +267,19 @@ def _update_env_file(update: ConfigUpdate) -> None:
     env_path.write_text("".join(lines))
 
 
-def _recreate_client(cfg: AppConfig) -> None:
+def _recreate_client(cfg: AppConfig) -> CommandCodeClient | None:
+    old = get_client()
     state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key)))
+    return old
 
 
-def _apply_config_update(update: ConfigUpdate) -> None:
+async def _apply_config_update(update: ConfigUpdate) -> None:
     update_dict = update.model_dump(exclude_none=True)
     cfg = get_config()
     if cfg is None:
         return
     changed_client = _apply_config_fields(cfg, update_dict)
     if changed_client:
-        _recreate_client(cfg)
+        old = _recreate_client(cfg)
+        if old is not None:
+            await old.aclose()

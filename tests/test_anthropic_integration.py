@@ -562,6 +562,62 @@ async def test_stream_empty_both_attempts_returns_error(client):
     assert any(e["event"] == "error" for e in events)
 
 
+# ====== Empty text-delta edge case ======
+
+
+@pytest.mark.asyncio
+async def test_stream_empty_text_delta_skipped_retry_succeeds(client):
+    """text-delta with empty text must not emit chunks, so retry works."""
+    _setup(
+        events=[
+            {"type": "text-delta", "text": ""},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}},
+        ],
+        events_second=[
+            {"type": "text-delta", "text": "Hello"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
+        ],
+    )
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 8000,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": True,
+    }
+    async with client as c:
+        resp = await c.post("/v1/messages", json=payload)
+    assert resp.status_code == 200
+    events = _parse_sse(resp.text)
+    assert events[0]["event"] == "message_start"
+    assert any(e["event"] == "content_block_delta" and e["data"]["delta"].get("text") == "Hello" for e in events)
+
+
+@pytest.mark.asyncio
+async def test_stream_error_not_retried(client):
+    """Non-empty AdapterError (e.g. rate limit) must NOT be retried."""
+    _setup(
+        events=[
+            {"type": "error", "error": {"message": "Rate limit exceeded", "statusCode": 429}},
+        ],
+        events_second=[
+            {"type": "text-delta", "text": "Should not appear"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
+        ],
+    )
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 8000,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": True,
+    }
+    async with client as c:
+        resp = await c.post("/v1/messages", json=payload)
+    events = _parse_sse(resp.text)
+    assert len(events) == 1
+    assert events[0]["event"] == "error"
+    assert "Rate limit" in events[0]["data"]["error"]["message"]
+
+
 # ====== Truncated stream tests ======
 
 

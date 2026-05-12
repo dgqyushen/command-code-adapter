@@ -44,7 +44,7 @@ async def _anthropic_stream_with_retry(
                 yield chunk
         except AdapterError as e:
             logger.warning("Anthropic stream AdapterError: %s (attempt %d/2)", e.message, attempt + 1)
-            if not yielded_any and attempt == 0:
+            if not yielded_any and attempt == 0 and "empty response" in e.message.lower():
                 continue
             yield _anthropic_sse_error(e.message)
             return
