@@ -40,11 +40,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Command Code Adapter", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CorrelationIDMiddleware)
 
+cfg = AppConfig()
 runtime_init(
-    AppConfig(),
+    cfg,
     CommandCodeClient(
-        base_url="https://api.commandcode.ai",
-        api_key="",
+        base_url=cfg.cc_base_url,
+        api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "",
     ),
 )
 app.include_router(openai_router)
