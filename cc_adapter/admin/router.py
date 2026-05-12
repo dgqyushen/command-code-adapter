@@ -183,7 +183,14 @@ async def verify_key(_=Depends(verify_auth)):
     cfg = get_config()
     if not cfg or not _primary_api_key(cfg.cc_api_key):
         return {"valid": False, "message": "No API Key configured"}
-    test_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key), timeout=10.0)
+    test_client = CommandCodeClient(
+        base_url=cfg.cc_base_url,
+        api_key=_primary_api_key(cfg.cc_api_key),
+        timeout=10.0,
+        max_connections=cfg.http_max_connections,
+        max_keepalive_connections=cfg.http_max_keepalive_connections,
+        http2=cfg.http2,
+    )
     try:
         test_body = make_cc_body(
             config=_make_config(
@@ -269,7 +276,16 @@ def _update_env_file(update: ConfigUpdate) -> None:
 
 def _recreate_client(cfg: AppConfig) -> CommandCodeClient | None:
     old = get_client()
-    state_init(cfg, CommandCodeClient(base_url=cfg.cc_base_url, api_key=_primary_api_key(cfg.cc_api_key)))
+    state_init(
+        cfg,
+        CommandCodeClient(
+            base_url=cfg.cc_base_url,
+            api_key=_primary_api_key(cfg.cc_api_key),
+            max_connections=cfg.http_max_connections,
+            max_keepalive_connections=cfg.http_max_keepalive_connections,
+            http2=cfg.http2,
+        ),
+    )
     return old
 
 

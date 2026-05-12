@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import datetime
 import logging
 from typing import Any
@@ -21,19 +22,23 @@ _CC_BODY_SKELETON: dict[str, Any] = {
 }
 
 
+_STATIC_CONFIG = {
+    "env": "adapter",
+    "workingDir": "/home/user/project",
+    "environment": "production",
+    "structure": ["src/", "tests/", "docs/"],
+    "isGitRepo": True,
+    "currentBranch": "main",
+    "mainBranch": "main",
+    "gitStatus": "clean",
+    "recentCommits": [],
+}
+
+
 def _make_config() -> dict[str, Any]:
-    return {
-        "env": "adapter",
-        "workingDir": "/home/user/project",
-        "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "environment": "production",
-        "structure": ["src/", "tests/", "docs/"],
-        "isGitRepo": True,
-        "currentBranch": "main",
-        "mainBranch": "main",
-        "gitStatus": "clean",
-        "recentCommits": [],
-    }
+    base = copy.deepcopy(_STATIC_CONFIG)
+    base["date"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return base
 
 
 def _make_cc_body(params: dict[str, Any]) -> dict[str, Any]:

@@ -42,7 +42,13 @@ def _get_client() -> CommandCodeClient:
     global _cc_client
     if _cc_client is None:
         cfg = _get_config()
-        _cc_client = CommandCodeClient(base_url=cfg.cc_base_url, api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "")
+        _cc_client = CommandCodeClient(
+            base_url=cfg.cc_base_url,
+            api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "",
+            max_connections=cfg.http_max_connections,
+            max_keepalive_connections=cfg.http_max_keepalive_connections,
+            http2=cfg.http2,
+        )
     return _cc_client
 
 
@@ -169,11 +175,6 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
         )
 
 
-def _is_empty_error(chunk: str) -> bool:
-    data = _chunk_payload(chunk)
-    return bool(data and data.get("error", {}).get("message") == "Upstream model returned an empty response")
-
-
 def _chunk_payload(chunk: str) -> dict | None:
     try:
         payload = chunk.removeprefix("data: ").strip()
@@ -185,8 +186,11 @@ def _chunk_payload(chunk: str) -> dict | None:
         return None
 
 
-def _has_visible_delta(chunk: str) -> bool:
-    data = _chunk_payload(chunk)
+def _is_empty_error(data: dict | None) -> bool:
+    return bool(data and data.get("error", {}).get("message") == "Upstream model returned an empty response")
+
+
+def _has_visible_delta(data: dict | None) -> bool:
     if not data:
         return False
     for choice in data.get("choices", []):
@@ -196,8 +200,7 @@ def _has_visible_delta(chunk: str) -> bool:
     return False
 
 
-def _has_streamable_delta(chunk: str) -> bool:
-    data = _chunk_payload(chunk)
+def _has_streamable_delta(data: dict | None) -> bool:
     if not data:
         return False
     for choice in data.get("choices", []):
@@ -207,6 +210,19 @@ def _has_streamable_delta(chunk: str) -> bool:
     return False
 
 
+def _log_stream_metrics(
+    model: str, empty_retry_count: int, retry_latencies: list[float], first_token_latency: float | None
+):
+    if empty_retry_count:
+        logger.info(
+            "Stream metric: model=%s empty_retry_count=%d retry_latencies=%s first_token_latency=%.3fs",
+            model,
+            empty_retry_count,
+            [f"{t:.3f}s" for t in retry_latencies],
+            first_token_latency or 0.0,
+        )
+
+
 async def _stream_with_retry(
     generate_fn,
     model: str,
@@ -214,6 +230,10 @@ async def _stream_with_retry(
     reasoning_effort: str | None = None,
     tools_available: bool = False,
 ):
+    empty_retry_count = 0
+    retry_latencies: list[float] = []
+    first_token_latency: float | None = None
+
     for attempt in range(2):
         cc_stream = generate_fn()
         translator = translate_stream(cc_stream, model, start_time, reasoning_effort, tools_available)
@@ -224,10 +244,13 @@ async def _stream_with_retry(
         emitted_visible_delta = False
 
         async for chunk in translator:
-            if _has_visible_delta(chunk):
+            data = _chunk_payload(chunk)
+            if _has_visible_delta(data):
                 emitted_visible_delta = True
+                if first_token_latency is None:
+                    first_token_latency = time.time() - start_time
 
-            if attempt == 0 and not emitted_visible_delta and _is_empty_error(chunk):
+            if attempt == 0 and not emitted_visible_delta and _is_empty_error(data):
                 logger.warning("Empty upstream response (attempt 1/2), retrying...")
                 await translator.aclose()
                 should_retry = True
@@ -235,7 +258,7 @@ async def _stream_with_retry(
 
             if buffer_until_visible:
                 buffered_chunks.append(chunk)
-                if _has_streamable_delta(chunk):
+                if _has_streamable_delta(data):
                     for buffered_chunk in buffered_chunks:
                         yield buffered_chunk
                         flushed_chunks = True
@@ -249,10 +272,15 @@ async def _stream_with_retry(
             for buffered_chunk in buffered_chunks:
                 yield buffered_chunk
                 flushed_chunks = True
+            _log_stream_metrics(model, empty_retry_count, retry_latencies, first_token_latency)
             return
 
         if should_retry:
+            empty_retry_count += 1
+            retry_latencies.append(time.time() - start_time)
             continue
+
+    _log_stream_metrics(model, empty_retry_count, retry_latencies, first_token_latency)
 
 
 async def _nonstream_with_retry(

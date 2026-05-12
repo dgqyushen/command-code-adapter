@@ -35,6 +35,17 @@ def _parse_sse_line(raw: str) -> dict[str, Any] | None:
     return parsed
 
 
+def _make_http2_safe(http2: bool) -> bool:
+    if not http2:
+        return False
+    try:
+        import h2  # noqa: F401
+    except ImportError:
+        logger.warning("http2=True configured but 'h2' package is not installed. Falling back to HTTP/1.1.")
+        return False
+    return http2
+
+
 class CommandCodeClient:
     def __init__(
         self,
@@ -42,16 +53,29 @@ class CommandCodeClient:
         api_key: str,
         timeout: float = 60.0,
         http_client: httpx.AsyncClient | None = None,
+        max_connections: int = 200,
+        max_keepalive_connections: int = 50,
+        http2: bool = False,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
         self._http_client = http_client
         self._owns_http_client = http_client is None
+        self._max_connections = max_connections
+        self._max_keepalive_connections = max_keepalive_connections
+        self._http2 = _make_http2_safe(http2)
 
     def _client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(timeout=self.timeout)
+            self._http_client = httpx.AsyncClient(
+                timeout=self.timeout,
+                limits=httpx.Limits(
+                    max_connections=self._max_connections,
+                    max_keepalive_connections=self._max_keepalive_connections,
+                ),
+                http2=self._http2,
+            )
             self._owns_http_client = True
         return self._http_client
 

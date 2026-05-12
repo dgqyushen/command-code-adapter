@@ -21,11 +21,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_anthropic_translator: AnthropicTranslator | None = None
+
 
 def _get_client() -> CommandCodeClient:
     cfg = get_admin_config() or AppConfig()
     api_key = cfg.cc_api_key[0] if cfg.cc_api_key else ""
-    return get_admin_client() or CommandCodeClient(base_url=cfg.cc_base_url, api_key=api_key)
+    existing = get_admin_client()
+    if existing is not None:
+        return existing
+    return CommandCodeClient(
+        base_url=cfg.cc_base_url,
+        api_key=api_key,
+        max_connections=cfg.http_max_connections,
+        max_keepalive_connections=cfg.http_max_keepalive_connections,
+        http2=cfg.http2,
+    )
+
+
+def _get_anthropic_translator() -> AnthropicTranslator:
+    global _anthropic_translator
+    if _anthropic_translator is None:
+        _anthropic_translator = AnthropicTranslator()
+    return _anthropic_translator
 
 
 async def _anthropic_stream_with_retry(
@@ -101,7 +119,7 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
         "yes" if req.tools else "no",
     )
 
-    cc_body, cc_headers = AnthropicTranslator().translate(req)
+    cc_body, cc_headers = _get_anthropic_translator().translate(req)
     cc_body["params"]["stream"] = True
 
     current_client = _get_client()

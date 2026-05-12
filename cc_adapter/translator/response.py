@@ -35,6 +35,33 @@ def _now() -> int:
     return int(time.time())
 
 
+def _stream_chunk_json(
+    response_id: str,
+    created: int,
+    model: str,
+    delta: dict,
+    finish_reason: str | None = None,
+    usage: dict | None = None,
+) -> str:
+    chunk: dict = {
+        "id": response_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "delta": delta,
+            }
+        ],
+    }
+    if finish_reason is not None:
+        chunk["choices"][0]["finish_reason"] = finish_reason
+    if usage is not None:
+        chunk["usage"] = usage
+    return json.dumps(chunk, ensure_ascii=False, default=str, separators=(",", ":"))
+
+
 def _map_finish_reason(cc_reason: str | None) -> str | None:
     if cc_reason is None:
         return None
@@ -111,13 +138,7 @@ async def translate_stream(
                 if not text:
                     continue
                 emitted_visible = True
-                chunk = ChatCompletionChunk(
-                    id=response_id,
-                    created=created,
-                    model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(content=text))],
-                )
-                yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+                yield f"data: {_stream_chunk_json(response_id, created, model, {'content': text, 'role': 'assistant'})}\n\n"
 
             elif event_type == "reasoning-delta":
                 if reasoning_effort == "off":
@@ -126,13 +147,7 @@ async def translate_stream(
                 if not text:
                     continue
                 reasoning_buf.append(text)
-                chunk = ChatCompletionChunk(
-                    id=response_id,
-                    created=created,
-                    model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(reasoning_content=text))],
-                )
-                yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+                yield f"data: {_stream_chunk_json(response_id, created, model, {'reasoning_content': text, 'role': 'assistant'})}\n\n"
 
             elif event_type == "tool-call":
                 emitted_visible = True
@@ -143,13 +158,13 @@ async def translate_stream(
                     tool_call.id,
                     tool_call.function.name,
                 )
-                chunk = ChatCompletionChunk(
-                    id=response_id,
-                    created=created,
-                    model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(tool_calls=[tool_call]))],
-                )
-                yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+                tc_dict = {
+                    "index": tool_call.index,
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {"name": tool_call.function.name, "arguments": tool_call.function.arguments},
+                }
+                yield f"data: {_stream_chunk_json(response_id, created, model, {'tool_calls': [tc_dict], 'role': 'assistant'})}\n\n"
                 tool_call_index += 1
 
             elif event_type == "tool-result":
@@ -159,13 +174,7 @@ async def translate_stream(
                 if not emitted_visible:
                     if reasoning_buf and not tools_available:
                         fallback = "".join(reasoning_buf)
-                        chunk = ChatCompletionChunk(
-                            id=response_id,
-                            created=created,
-                            model=model,
-                            choices=[DeltaChoice(delta=ChatMessageResponse(content=fallback))],
-                        )
-                        yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+                        yield f"data: {_stream_chunk_json(response_id, created, model, {'content': fallback, 'role': 'assistant'})}\n\n"
                         emitted_visible = True
                     else:
                         error = AdapterError(message="Upstream model returned an empty response", status_code=502)
@@ -173,14 +182,8 @@ async def translate_stream(
                         break
                 finish_reason = "tool_calls" if tool_call_index else _map_finish_reason(event.get("finishReason"))
                 usage = _parse_usage(event.get("totalUsage"), model, start_time)
-                chunk = ChatCompletionChunk(
-                    id=response_id,
-                    created=created,
-                    model=model,
-                    choices=[DeltaChoice(delta=ChatMessageResponse(), finish_reason=finish_reason)],
-                    usage=usage,
-                )
-                yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+                usage_dict = usage.model_dump(exclude_none=True) if usage else None
+                yield f"data: {_stream_chunk_json(response_id, created, model, {'role': 'assistant'}, finish_reason=finish_reason, usage=usage_dict)}\n\n"
 
             elif event_type == "error":
                 error = _event_error(event)

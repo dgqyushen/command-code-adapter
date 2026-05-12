@@ -8,7 +8,7 @@ packages = [{ include = "cc_adapter" }]
 [tool.poetry.dependencies]
 python = ">=3.11"
 fastapi = "^0.115.0"
-httpx = "^0.28.0"
+httpx = { version = "^0.28.0", extras = ["http2"] }
 pydantic = "^2.0"
 pydantic-settings = "^2.0"
 uvicorn = { version = "^0.34.0", extras = ["standard"] }

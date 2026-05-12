@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import copy
+import json
+from functools import lru_cache
+
+
 SCHEMA_PARAM_MAP = {
     "filePath": "path",
     "oldString": "old_str",
@@ -19,9 +24,7 @@ ARGS_STR_MAP = {
 }
 
 
-def normalize_schema(schema: dict) -> dict:
-    if not isinstance(schema, dict):
-        return schema
+def _do_normalize_schema(schema: dict) -> dict:
     properties = schema.get("properties")
     if not isinstance(properties, dict):
         return schema
@@ -34,6 +37,17 @@ def normalize_schema(schema: dict) -> dict:
     if isinstance(required, list):
         result["required"] = [SCHEMA_PARAM_MAP.get(r, r) for r in required]
     return result
+
+
+@lru_cache(maxsize=128)
+def _cached_normalize_schema(schema_json: str) -> dict:
+    return _do_normalize_schema(json.loads(schema_json))
+
+
+def normalize_schema(schema: dict) -> dict:
+    if not isinstance(schema, dict):
+        return schema
+    return copy.deepcopy(_cached_normalize_schema(json.dumps(schema, sort_keys=True)))
 
 
 def normalize_args(tool_name: str, args: dict, map_path: bool = True) -> dict:
