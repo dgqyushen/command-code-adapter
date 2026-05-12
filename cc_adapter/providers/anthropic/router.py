@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -17,7 +17,7 @@ from cc_adapter.core.config import AppConfig
 from cc_adapter.command_code.client import CommandCodeClient
 from cc_adapter.core.errors import AdapterError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -52,7 +52,7 @@ async def _anthropic_stream_with_retry(
                 yielded_any = True
                 yield chunk
         except AdapterError as e:
-            logger.warning("Anthropic stream AdapterError: %s (attempt %d/2)", e.message, attempt + 1)
+            logger.warning("upstream.retry", reason="empty_response", attempt=attempt + 1, max_attempts=2)
             if not yielded_any and attempt == 0 and "empty response" in e.message.lower():
                 continue
             yield _anthropic_sse_error(e.message)
@@ -80,13 +80,14 @@ async def _anthropic_nonstream_with_retry(
             return await collect_and_translate_anthropic_nonstream(cc_stream, model)
         except AdapterError as e:
             if attempt == 0 and "empty response" in e.message.lower():
-                logger.warning("Empty upstream response in anthropic nonstream (attempt 1/2), retrying...")
+                logger.warning("upstream.retry", reason="empty_response", attempt=1, max_attempts=2)
                 continue
             raise
 
 
 @router.post("/v1/messages")
 async def anthropic_chat(req: AnthropicRequest, request: Request):
+    structlog.contextvars.bind_contextvars(protocol="anthropic")
     cfg = get_config() or AppConfig()
 
     api_key_header = request.headers.get("x-api-key", "")
@@ -103,11 +104,11 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
             )
 
     logger.info(
-        "Anthropic request: model=%s stream=%s messages=%d tools=%s",
-        req.model,
-        req.stream,
-        len(req.messages),
-        "yes" if req.tools else "no",
+        "anthropic.request",
+        model=req.model,
+        stream=str(req.stream),
+        messages=len(req.messages),
+        tools="yes" if req.tools else "no",
     )
 
     translator = get_anthropic_translator()
