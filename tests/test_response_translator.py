@@ -5,7 +5,7 @@ import time
 import pytest
 from cc_adapter.errors import AdapterError
 from cc_adapter.main import _stream_with_retry
-from cc_adapter.translator.response import collect_and_translate_nonstream, translate_stream
+from cc_adapter.openai.response import collect_and_translate_nonstream, translate_stream
 
 
 @pytest.mark.asyncio

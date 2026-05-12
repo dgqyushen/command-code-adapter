@@ -14,8 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from cc_adapter.config import AppConfig
 from cc_adapter.client import CommandCodeClient
 from cc_adapter.logging import configure_logging, CorrelationIDMiddleware
-from cc_adapter.translator.request import RequestTranslator
-from cc_adapter.translator.response import translate_stream, collect_and_translate_nonstream
+from cc_adapter.openai.request import RequestTranslator
+from cc_adapter.openai.response import translate_stream, collect_and_translate_nonstream
 from cc_adapter.errors import AdapterError, AuthenticationError
 from cc_adapter.models.openai import ChatCompletionRequest
 from cc_adapter.admin import router as admin_router

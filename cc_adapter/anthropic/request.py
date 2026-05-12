@@ -7,8 +7,8 @@ from typing import Any
 
 from cc_adapter.anthropic.models import AnthropicRequest
 from cc_adapter.headers import make_cc_headers
-from cc_adapter.translator.request import MODEL_PROVIDER_MAP
-from cc_adapter.translator.tool_mapping import normalize_input_args, normalize_schema
+from cc_adapter._shared import MODEL_PROVIDER_MAP
+from cc_adapter._tool_mapping import normalize_input_args, normalize_schema
 
 logger = logging.getLogger(__name__)
 

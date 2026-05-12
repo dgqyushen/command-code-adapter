@@ -12,7 +12,8 @@ from cc_adapter.admin.auth import generate_token, validate_token
 from cc_adapter.admin.state import get_config, get_client, init as state_init
 from cc_adapter.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.client import CommandCodeClient
-from cc_adapter.translator.request import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX, make_cc_body, _make_config
+from cc_adapter._shared import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX
+from cc_adapter._body import make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens
 from cc_adapter.headers import make_cc_headers
 from cc_adapter._utils import normalize_api_keys, is_deepseek_v4_model

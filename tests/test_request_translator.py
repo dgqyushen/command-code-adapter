@@ -1,7 +1,7 @@
 import pytest
 from cc_adapter.models.openai import ChatCompletionRequest, ChatMessage, ToolDefinition, FunctionDefinition
 from cc_adapter.errors import map_upstream_error, AuthenticationError, RateLimitError
-from cc_adapter.translator.request import RequestTranslator
+from cc_adapter.openai.request import RequestTranslator
 
 
 def test_request_model_creation():

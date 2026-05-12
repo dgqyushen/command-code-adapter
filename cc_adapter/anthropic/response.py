@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 
 from cc_adapter.anthropic.models import AnthropicResponse, AnthropicUsage
 from cc_adapter.errors import AdapterError, map_upstream_error
-from cc_adapter.translator.tool_mapping import normalize_args
+from cc_adapter._tool_mapping import normalize_args
 
 logger = logging.getLogger(__name__)
 
