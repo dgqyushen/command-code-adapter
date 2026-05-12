@@ -453,17 +453,12 @@ function showTokenManager() {
 
 // Config
 let configData = null;
-let configRawMode = false;
 
 async function renderConfig() {
   const el = document.getElementById("tab-config");
   el.innerHTML = `
     <h2 data-i18n="config">${t("config")}</h2>
-    <div style="margin-bottom:12px">
-      <button class="btn ${configRawMode ? 'btn-primary' : 'btn-secondary'}" id="cfg-toggle-raw">${t("rawMode")}</button>
-      <button class="btn ${configRawMode ? 'btn-secondary' : 'btn-primary'}" id="cfg-toggle-form">${t("formMode")}</button>
-    </div>
-    <div id="cfg-form-view" class="${configRawMode ? 'hidden' : ''}">
+    <div id="cfg-form-view">
       <div class="card">
         <div class="form-group">
           <label>CC_ADAPTER_CC_API_KEY</label>
@@ -499,28 +494,10 @@ async function renderConfig() {
           <button class="btn btn-secondary" id="cfg-cancel">${t("cancel")}</button>
         </div>
       </div>
-    </div>
-    <div id="cfg-raw-view" class="${configRawMode ? '' : 'hidden'}">
-      <div class="card">
-        <div class="form-group">
-          <label>.env</label>
-          <textarea id="cfg-raw-content" style="width:100%;min-height:300px;font-family:monospace;font-size:13px;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);resize:vertical"></textarea>
-        </div>
-        <div class="form-actions">
-          <button class="btn btn-primary" id="cfg-raw-save">${t("rawSave")}</button>
-        </div>
-      </div>
     </div>`;
-  document.getElementById("cfg-toggle-raw").onclick = () => { configRawMode = true; renderConfig(); };
-  document.getElementById("cfg-toggle-form").onclick = () => { configRawMode = false; renderConfig(); };
-  if (configRawMode) {
-    loadRawConfig();
-    document.getElementById("cfg-raw-save").onclick = saveRawConfig;
-  } else {
-    loadConfig();
-    document.getElementById("cfg-save").onclick = saveConfig;
-    document.getElementById("cfg-cancel").onclick = loadConfig;
-  }
+  loadConfig();
+  document.getElementById("cfg-save").onclick = saveConfig;
+  document.getElementById("cfg-cancel").onclick = loadConfig;
 
   // Append reasoning-effort info card
   try {
@@ -580,23 +557,6 @@ async function saveConfig() {
     if (!resp.ok) throw new Error(await resp.text());
     configData = await resp.json();
     showToast(t("saved"), "success");
-  } catch { showToast(t("saveFailed"), "error"); }
-}
-
-async function loadRawConfig() {
-  try {
-    const resp = await api("GET", "/admin/api/config/raw");
-    const data = await resp.json();
-    document.getElementById("cfg-raw-content").value = data.content;
-  } catch { showToast(t("saveFailed"), "error"); }
-}
-
-async function saveRawConfig() {
-  const content = document.getElementById("cfg-raw-content").value;
-  try {
-    const resp = await api("PUT", "/admin/api/config/raw", { content });
-    if (!resp.ok) throw new Error(await resp.text());
-    showToast(t("rawSaved"), "success");
   } catch { showToast(t("saveFailed"), "error"); }
 }
 

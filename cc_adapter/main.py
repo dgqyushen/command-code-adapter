@@ -134,7 +134,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 
     start_time = time.time()
 
-    current_client = get_admin_client() or cc_client
+    current_client = get_admin_client() or _get_client()
     if not current_client.api_key:
         raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
 

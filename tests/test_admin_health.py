@@ -57,8 +57,20 @@ async def test_raw_config_endpoints(tmp_path, monkeypatch):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/admin/api/config/raw", headers={"Authorization": f"Bearer {token}"})
-    assert resp.status_code == 200
-    assert "CC_ADAPTER_HOST=0.0.0.0" in resp.json()["content"]
+    assert resp.status_code == 410
+    assert "no longer available" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_raw_config_put_returns_410(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    token = generate_token()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.put(
+            "/admin/api/config/raw", json={"content": "test"}, headers={"Authorization": f"Bearer {token}"}
+        )
+    assert resp.status_code == 410
 
 
 @pytest.mark.asyncio

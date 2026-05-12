@@ -13,9 +13,14 @@ from cc_adapter.config import AppConfig
 from cc_adapter.main import app
 
 
-def _make_mock_generate(mock_client, events: list[dict]):
+def _make_mock_generate(mock_client, events: list[dict], events_second: list[dict] | None = None):
+    call_count = 0
+
     async def _generate(body, extra_headers=None):
-        for event in events:
+        nonlocal call_count
+        call_count += 1
+        chosen = events_second if call_count == 2 and events_second else events
+        for event in chosen:
             yield event
 
     mock_client.generate = _generate
@@ -45,13 +50,15 @@ def _parse_sse(text: str) -> list[dict]:
     return events
 
 
-def _setup(cfg_overrides: dict | None = None, events: list[dict] | None = None):
+def _setup(
+    cfg_overrides: dict | None = None, events: list[dict] | None = None, events_second: list[dict] | None = None
+):
     cfg = AppConfig(**(cfg_overrides or {}), cc_api_key="test_key_123")
     mock_client = MagicMock(spec=CommandCodeClient)
     mock_client.api_key = "test_key_123"
     mock_client.base_url = "https://api.commandcode.ai"
     if events is not None:
-        _make_mock_generate(mock_client, events)
+        _make_mock_generate(mock_client, events, events_second)
     admin_init(cfg, mock_client)
     return cfg, mock_client
 
@@ -61,10 +68,12 @@ def _setup(cfg_overrides: dict | None = None, events: list[dict] | None = None):
 
 @pytest.mark.asyncio
 async def test_nonstream_single_tool_call(client):
-    cfg, mock_client = _setup(events=[
-        {"type": "tool-call", "toolCallId": "call_abc", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
-    ])
+    cfg, mock_client = _setup(
+        events=[
+            {"type": "tool-call", "toolCallId": "call_abc", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
@@ -100,16 +109,24 @@ async def test_nonstream_single_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_text_and_tool_call(client):
-    _setup(events=[
-        {"type": "text-delta", "text": "Let me read that file"},
-        {"type": "tool-call", "toolCallId": "call_abc", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 25}},
-    ])
+    _setup(
+        events=[
+            {"type": "text-delta", "text": "Let me read that file"},
+            {"type": "tool-call", "toolCallId": "call_abc", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 25}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "read file /tmp/test.txt"}],
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": False,
     }
     async with client as c:
@@ -124,16 +141,28 @@ async def test_nonstream_text_and_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_multiple_tool_calls(client):
-    _setup(events=[
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/a.txt"}},
-        {"type": "tool-call", "toolCallId": "call_2", "toolName": "Read", "input": {"path": "/tmp/b.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 30}},
-    ])
+    _setup(
+        events=[
+            {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/a.txt"}},
+            {"type": "tool-call", "toolCallId": "call_2", "toolName": "Read", "input": {"path": "/tmp/b.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 30}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "read two files"}],
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"filePath": {"type": "string"}}, "required": ["filePath"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"filePath": {"type": "string"}},
+                    "required": ["filePath"],
+                },
+            }
+        ],
         "stream": False,
     }
     async with client as c:
@@ -147,16 +176,24 @@ async def test_nonstream_multiple_tool_calls(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_thinking_then_tool_call(client):
-    _setup(events=[
-        {"type": "reasoning-delta", "text": "I need to read the file to check its contents"},
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 30}},
-    ])
+    _setup(
+        events=[
+            {"type": "reasoning-delta", "text": "I need to read the file to check its contents"},
+            {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 30}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "read file /tmp/test.txt"}],
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": False,
     }
     async with client as c:
@@ -171,15 +208,23 @@ async def test_nonstream_thinking_then_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_stream_tool_call_only(client):
-    _setup(events=[
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
-    ])
+    _setup(
+        events=[
+            {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "read file"}],
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": True,
     }
     async with client as c:
@@ -201,17 +246,38 @@ async def test_stream_tool_call_only(client):
 
 @pytest.mark.asyncio
 async def test_stream_text_then_tool_call(client):
-    _setup(events=[
-        {"type": "text-delta", "text": "Let me "},
-        {"type": "text-delta", "text": "read the file"},
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Write", "input": {"path": "/tmp/test.txt", "old_str": "foo", "new_str": "bar"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 25}},
-    ])
+    _setup(
+        events=[
+            {"type": "text-delta", "text": "Let me "},
+            {"type": "text-delta", "text": "read the file"},
+            {
+                "type": "tool-call",
+                "toolCallId": "call_1",
+                "toolName": "Write",
+                "input": {"path": "/tmp/test.txt", "old_str": "foo", "new_str": "bar"},
+            },
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 25}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "edit file"}],
-        "tools": [{"name": "Write", "description": "Write a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "oldString": {"type": "string"}, "newString": {"type": "string"}}, "required": ["path", "oldString", "newString"]}}],
+        "tools": [
+            {
+                "name": "Write",
+                "description": "Write a file",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "oldString": {"type": "string"},
+                        "newString": {"type": "string"},
+                    },
+                    "required": ["path", "oldString", "newString"],
+                },
+            }
+        ],
         "stream": True,
     }
     async with client as c:
@@ -235,16 +301,24 @@ async def test_stream_text_then_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_stream_thinking_then_tool_call(client):
-    _setup(events=[
-        {"type": "reasoning-delta", "text": "I need to read the file..."},
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
-    ])
+    _setup(
+        events=[
+            {"type": "reasoning-delta", "text": "I need to read the file..."},
+            {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "read file"}],
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": True,
     }
     async with client as c:
@@ -261,16 +335,24 @@ async def test_stream_thinking_then_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_stream_multiple_tool_calls(client):
-    _setup(events=[
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/a.txt"}},
-        {"type": "tool-call", "toolCallId": "call_2", "toolName": "Read", "input": {"path": "/tmp/b.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 30}},
-    ])
+    _setup(
+        events=[
+            {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/a.txt"}},
+            {"type": "tool-call", "toolCallId": "call_2", "toolName": "Read", "input": {"path": "/tmp/b.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 30}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "read two files"}],
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": True,
     }
     async with client as c:
@@ -286,19 +368,36 @@ async def test_stream_multiple_tool_calls(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_multi_turn_tool_result(client):
-    _setup(events=[
-        {"type": "text-delta", "text": "The file contains: hello world"},
-        {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 100, "outputTokens": 10}},
-    ])
+    _setup(
+        events=[
+            {"type": "text-delta", "text": "The file contains: hello world"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 100, "outputTokens": 10}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [
             {"role": "user", "content": "read /tmp/test.txt"},
-            {"role": "assistant", "content": [{"type": "tool_use", "id": "call_1", "name": "Read", "input": {"filePath": "/tmp/test.txt"}}]},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "id": "call_1", "name": "Read", "input": {"filePath": "/tmp/test.txt"}}
+                ],
+            },
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "call_1", "content": "hello world"}]},
         ],
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"filePath": {"type": "string"}}, "required": ["filePath"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"filePath": {"type": "string"}},
+                    "required": ["filePath"],
+                },
+            }
+        ],
         "stream": False,
     }
     async with client as c:
@@ -310,9 +409,11 @@ async def test_nonstream_multi_turn_tool_result(client):
 
 @pytest.mark.asyncio
 async def test_stream_error_event(client):
-    _setup(events=[
-        {"type": "error", "error": {"message": "Rate limit exceeded", "statusCode": 429}},
-    ])
+    _setup(
+        events=[
+            {"type": "error", "error": {"message": "Rate limit exceeded", "statusCode": 429}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
@@ -328,15 +429,36 @@ async def test_stream_error_event(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_tool_call_edit_operation(client):
-    _setup(events=[
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Edit", "input": {"path": "/tmp/test.py", "old_str": "foo", "new_str": "bar"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 15}},
-    ])
+    _setup(
+        events=[
+            {
+                "type": "tool-call",
+                "toolCallId": "call_1",
+                "toolName": "Edit",
+                "input": {"path": "/tmp/test.py", "old_str": "foo", "new_str": "bar"},
+            },
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 15}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 8000,
         "messages": [{"role": "user", "content": "edit file"}],
-        "tools": [{"name": "Edit", "description": "Edit a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "oldString": {"type": "string"}, "newString": {"type": "string"}}, "required": ["path", "oldString", "newString"]}}],
+        "tools": [
+            {
+                "name": "Edit",
+                "description": "Edit a file",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "oldString": {"type": "string"},
+                        "newString": {"type": "string"},
+                    },
+                    "required": ["path", "oldString", "newString"],
+                },
+            }
+        ],
         "stream": False,
     }
     async with client as c:
@@ -352,10 +474,12 @@ async def test_nonstream_tool_call_edit_operation(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_default_max_tokens_is_reasonable(client):
-    cfg, mock_client = _setup(events=[
-        {"type": "text-delta", "text": "Hello"},
-        {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
-    ])
+    cfg, mock_client = _setup(
+        events=[
+            {"type": "text-delta", "text": "Hello"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
+        ]
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "messages": [{"role": "user", "content": "hi"}],
@@ -368,10 +492,13 @@ async def test_nonstream_default_max_tokens_is_reasonable(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_access_key_auth(client):
-    _setup(cfg_overrides={"access_key": "secret456"}, events=[
-        {"type": "text-delta", "text": "Hello"},
-        {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
-    ])
+    _setup(
+        cfg_overrides={"access_key": "secret456"},
+        events=[
+            {"type": "text-delta", "text": "Hello"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
+        ],
+    )
     payload = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 100,
@@ -383,3 +510,79 @@ async def test_nonstream_access_key_auth(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["content"][0]["text"] == "Hello"
+
+
+# ====== Empty stream retry tests ======
+
+
+@pytest.mark.asyncio
+async def test_stream_empty_then_retry_succeeds(client):
+    _setup(
+        events=[
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}},
+        ],
+        events_second=[
+            {"type": "text-delta", "text": "Hello"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
+        ],
+    )
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 8000,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": True,
+    }
+    async with client as c:
+        resp = await c.post("/v1/messages", json=payload)
+    assert resp.status_code == 200
+    events = _parse_sse(resp.text)
+    assert events[0]["event"] == "message_start"
+    assert any(e["event"] == "content_block_delta" and e["data"]["delta"].get("text") == "Hello" for e in events)
+
+
+@pytest.mark.asyncio
+async def test_stream_empty_both_attempts_returns_error(client):
+    _setup(
+        events=[
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}},
+        ],
+        events_second=[
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}},
+        ],
+    )
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 8000,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": True,
+    }
+    async with client as c:
+        resp = await c.post("/v1/messages", json=payload)
+    events = _parse_sse(resp.text)
+    assert any(e["event"] == "error" for e in events)
+
+
+# ====== Truncated stream tests ======
+
+
+@pytest.mark.asyncio
+async def test_stream_truncated_mid_text(client):
+    _setup(
+        events=[
+            {"type": "text-delta", "text": "Hello"},
+        ]
+    )
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 8000,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": True,
+    }
+    async with client as c:
+        resp = await c.post("/v1/messages", json=payload)
+    events = _parse_sse(resp.text)
+    # Should get message_start, content_block_start, delta, content_block_stop, then error
+    assert events[0]["event"] == "message_start"
+    assert any(e["event"] == "content_block_delta" for e in events)
+    assert any(e["event"] == "content_block_stop" for e in events)
+    assert any(e["event"] == "error" for e in events)

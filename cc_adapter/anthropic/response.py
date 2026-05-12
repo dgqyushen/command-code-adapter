@@ -115,195 +115,207 @@ async def translate_anthropic_stream(
     in_thinking = False
     in_text = False
     has_started = False
+    has_content = False
 
-    try:
-        async for event in cc_stream:
-            event_type = event.get("type")
+    async for event in cc_stream:
+        event_type = event.get("type")
 
-            if event_type == "reasoning-delta":
-                if not has_started:
-                    yield _anthropic_sse(
-                        "message_start",
-                        {
-                            "type": "message_start",
-                            "message": {
-                                "id": response_id,
-                                "type": "message",
-                                "role": "assistant",
-                                "content": [],
-                                "model": model,
-                                "stop_reason": None,
-                                "stop_sequence": None,
-                                "usage": {"input_tokens": 0, "output_tokens": 0},
-                            },
+        if event_type == "reasoning-delta":
+            if not has_started:
+                yield _anthropic_sse(
+                    "message_start",
+                    {
+                        "type": "message_start",
+                        "message": {
+                            "id": response_id,
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [],
+                            "model": model,
+                            "stop_reason": None,
+                            "stop_sequence": None,
+                            "usage": {"input_tokens": 0, "output_tokens": 0},
                         },
-                    )
-                    has_started = True
-                if in_text:
-                    yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
-                    content_index += 1
-                    in_text = False
-                if not in_thinking:
-                    yield _anthropic_sse(
-                        "content_block_start",
-                        {
-                            "type": "content_block_start",
-                            "index": content_index,
-                            "content_block": {"type": "thinking", "thinking": ""},
-                        },
-                    )
-                    in_thinking = True
-                text = event.get("text", "")
-                if text:
-                    yield _anthropic_sse(
-                        "content_block_delta",
-                        {
-                            "type": "content_block_delta",
-                            "index": content_index,
-                            "delta": {"type": "thinking_delta", "thinking": text},
-                        },
-                    )
-
-            elif event_type == "text-delta":
-                if not has_started:
-                    yield _anthropic_sse(
-                        "message_start",
-                        {
-                            "type": "message_start",
-                            "message": {
-                                "id": response_id,
-                                "type": "message",
-                                "role": "assistant",
-                                "content": [],
-                                "model": model,
-                                "stop_reason": None,
-                                "stop_sequence": None,
-                                "usage": {"input_tokens": 0, "output_tokens": 0},
-                            },
-                        },
-                    )
-                    has_started = True
-                if in_thinking:
-                    yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
-                    content_index += 1
-                    in_thinking = False
-                if not in_text:
-                    yield _anthropic_sse(
-                        "content_block_start",
-                        {
-                            "type": "content_block_start",
-                            "index": content_index,
-                            "content_block": {"type": "text", "text": ""},
-                        },
-                    )
-                    in_text = True
-                text = event.get("text", "")
-                if text:
-                    yield _anthropic_sse(
-                        "content_block_delta",
-                        {
-                            "type": "content_block_delta",
-                            "index": content_index,
-                            "delta": {"type": "text_delta", "text": text},
-                        },
-                    )
-
-            elif event_type == "tool-call":
-                if not has_started:
-                    yield _anthropic_sse(
-                        "message_start",
-                        {
-                            "type": "message_start",
-                            "message": {
-                                "id": response_id,
-                                "type": "message",
-                                "role": "assistant",
-                                "content": [],
-                                "model": model,
-                                "stop_reason": None,
-                                "stop_sequence": None,
-                                "usage": {"input_tokens": 0, "output_tokens": 0},
-                            },
-                        },
-                    )
-                    has_started = True
-                if in_thinking:
-                    yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
-                    content_index += 1
-                    in_thinking = False
-                if in_text:
-                    yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
-                    content_index += 1
-                    in_text = False
-                tool_name = event.get("toolName", "")
-                raw_input = event.get("input", {})
-                tool_input = normalize_args(tool_name, raw_input, map_path=False)
+                    },
+                )
+                has_started = True
+            if in_text:
+                yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+                content_index += 1
+                in_text = False
+            if not in_thinking:
                 yield _anthropic_sse(
                     "content_block_start",
                     {
                         "type": "content_block_start",
                         "index": content_index,
-                        "content_block": {
-                            "type": "tool_use",
-                            "id": event.get("toolCallId", f"toolu_{uuid.uuid4().hex[:12]}"),
-                            "name": tool_name,
-                            "input": {},
+                        "content_block": {"type": "thinking", "thinking": ""},
+                    },
+                )
+                in_thinking = True
+            text = event.get("text", "")
+            if text:
+                has_content = True
+                yield _anthropic_sse(
+                    "content_block_delta",
+                    {
+                        "type": "content_block_delta",
+                        "index": content_index,
+                        "delta": {"type": "thinking_delta", "thinking": text},
+                    },
+                )
+
+        elif event_type == "text-delta":
+            if not has_started:
+                yield _anthropic_sse(
+                    "message_start",
+                    {
+                        "type": "message_start",
+                        "message": {
+                            "id": response_id,
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [],
+                            "model": model,
+                            "stop_reason": None,
+                            "stop_sequence": None,
+                            "usage": {"input_tokens": 0, "output_tokens": 0},
                         },
                     },
                 )
-                if tool_input:
-                    yield _anthropic_sse(
-                        "content_block_delta",
-                        {
-                            "type": "content_block_delta",
-                            "index": content_index,
-                            "delta": {
-                                "type": "input_json_delta",
-                                "partial_json": json.dumps(tool_input, ensure_ascii=False, separators=(",", ":")),
-                            },
-                        },
-                    )
+                has_started = True
+            if in_thinking:
                 yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
                 content_index += 1
-
-            elif event_type == "finish":
-                if in_thinking:
-                    yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
-                    content_index += 1
-                if in_text:
-                    yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
-
-                stop_reason = _map_stop_reason(event.get("finishReason"))
-                raw_usage = event.get("totalUsage") or {}
+                in_thinking = False
+            if not in_text:
                 yield _anthropic_sse(
-                    "message_delta",
+                    "content_block_start",
                     {
-                        "type": "message_delta",
-                        "delta": {"stop_reason": stop_reason, "stop_sequence": None},
-                        "usage": {"output_tokens": raw_usage.get("outputTokens", 0)},
+                        "type": "content_block_start",
+                        "index": content_index,
+                        "content_block": {"type": "text", "text": ""},
                     },
                 )
-                yield _anthropic_sse("message_stop", {"type": "message_stop"})
-                return
-
-            elif event_type == "error":
-                err = event.get("error", {})
-                message = err.get("message", "Unknown error")
+                in_text = True
+            text = event.get("text", "")
+            if text:
+                has_content = True
                 yield _anthropic_sse(
-                    "error",
+                    "content_block_delta",
                     {
-                        "type": "error",
-                        "error": {"type": "api_error", "message": message},
+                        "type": "content_block_delta",
+                        "index": content_index,
+                        "delta": {"type": "text_delta", "text": text},
                     },
                 )
-                return
 
-    except AdapterError as e:
-        logger.error("Stream error: %s", e.message)
+        elif event_type == "tool-call":
+            if not has_started:
+                yield _anthropic_sse(
+                    "message_start",
+                    {
+                        "type": "message_start",
+                        "message": {
+                            "id": response_id,
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [],
+                            "model": model,
+                            "stop_reason": None,
+                            "stop_sequence": None,
+                            "usage": {"input_tokens": 0, "output_tokens": 0},
+                        },
+                    },
+                )
+                has_started = True
+            has_content = True
+            if in_thinking:
+                yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+                content_index += 1
+                in_thinking = False
+            if in_text:
+                yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+                content_index += 1
+                in_text = False
+            tool_name = event.get("toolName", "")
+            raw_input = event.get("input", {})
+            tool_input = normalize_args(tool_name, raw_input, map_path=False)
+            yield _anthropic_sse(
+                "content_block_start",
+                {
+                    "type": "content_block_start",
+                    "index": content_index,
+                    "content_block": {
+                        "type": "tool_use",
+                        "id": event.get("toolCallId", f"toolu_{uuid.uuid4().hex[:12]}"),
+                        "name": tool_name,
+                        "input": {},
+                    },
+                },
+            )
+            if tool_input:
+                yield _anthropic_sse(
+                    "content_block_delta",
+                    {
+                        "type": "content_block_delta",
+                        "index": content_index,
+                        "delta": {
+                            "type": "input_json_delta",
+                            "partial_json": json.dumps(tool_input, ensure_ascii=False, separators=(",", ":")),
+                        },
+                    },
+                )
+            yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+            content_index += 1
+
+        elif event_type == "finish":
+            if not has_content:
+                raise AdapterError(message="Upstream model returned an empty response", status_code=502)
+            if in_thinking:
+                yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+                content_index += 1
+            if in_text:
+                yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+
+            stop_reason = _map_stop_reason(event.get("finishReason"))
+            raw_usage = event.get("totalUsage") or {}
+            yield _anthropic_sse(
+                "message_delta",
+                {
+                    "type": "message_delta",
+                    "delta": {"stop_reason": stop_reason, "stop_sequence": None},
+                    "usage": {"output_tokens": raw_usage.get("outputTokens", 0)},
+                },
+            )
+            yield _anthropic_sse("message_stop", {"type": "message_stop"})
+            return
+
+        elif event_type == "error":
+            err = event.get("error", {})
+            message = err.get("message", "Unknown error")
+            yield _anthropic_sse(
+                "error",
+                {
+                    "type": "error",
+                    "error": {"type": "api_error", "message": message},
+                },
+            )
+            return
+
+    if in_thinking:
+        yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+        content_index += 1
+    if in_text:
+        yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
+
+    if has_content:
         yield _anthropic_sse(
             "error",
             {
                 "type": "error",
-                "error": {"type": "api_error", "message": e.message},
+                "error": {"type": "api_error", "message": "Upstream stream ended before finish"},
             },
         )
+    else:
+        raise AdapterError(message="Upstream model returned an empty response", status_code=502)

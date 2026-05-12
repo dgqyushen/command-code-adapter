@@ -6,7 +6,7 @@ from typing import AsyncGenerator, Any
 
 import httpx
 
-from cc_adapter.errors import map_upstream_error, AuthenticationError, TimeoutError_
+from cc_adapter.errors import map_upstream_error, AuthenticationError, TimeoutError_, UpstreamError
 from cc_adapter.headers import make_cc_headers
 
 logger = logging.getLogger(__name__)
@@ -36,10 +36,28 @@ def _parse_sse_line(raw: str) -> dict[str, Any] | None:
 
 
 class CommandCodeClient:
-    def __init__(self, base_url: str, api_key: str, timeout: float = 60.0):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float = 60.0,
+        http_client: httpx.AsyncClient | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self._http_client = http_client
+        self._owns_http_client = http_client is None
+
+    def _client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=self.timeout)
+            self._owns_http_client = True
+        return self._http_client
+
+    async def aclose(self) -> None:
+        if self._http_client is not None and self._owns_http_client:
+            await self._http_client.aclose()
 
     async def generate(
         self, body: dict[str, Any], extra_headers: dict[str, str] | None = None
@@ -52,27 +70,23 @@ class CommandCodeClient:
 
         url = f"{self.base_url}/alpha/generate"
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                async with client.stream("POST", url, json=body, headers=headers) as response:
-                    if response.is_error:
-                        error_body = await response.aread()
-                        text = error_body.decode() if error_body else response.reason_phrase or "Unknown error"
-                        logger.warning("CC API error: status=%d body=%s", response.status_code, text[:500])
-                        raise map_upstream_error(response.status_code, text)
+        client = self._client()
+        try:
+            async with client.stream("POST", url, json=body, headers=headers) as response:
+                if response.is_error:
+                    error_body = await response.aread()
+                    text = error_body.decode() if error_body else response.reason_phrase or "Unknown error"
+                    logger.warning("CC API error: status=%d body=%s", response.status_code, text[:500])
+                    raise map_upstream_error(response.status_code, text)
 
-                    async for line in response.aiter_lines():
-                        parsed = _parse_sse_line(line)
-                        if parsed is not None:
-                            yield parsed
+                async for line in response.aiter_lines():
+                    parsed = _parse_sse_line(line)
+                    if parsed is not None:
+                        yield parsed
 
-            except httpx.TimeoutException:
-                logger.warning("CC API request timed out (url=%s)", url)
-                raise TimeoutError_("Command Code API request timed out")
-            except httpx.HTTPStatusError as e:
-                logger.warning(
-                    "CC API HTTP error: status=%d url=%s",
-                    e.response.status_code,
-                    url,
-                )
-                raise map_upstream_error(e.response.status_code, str(e))
+        except httpx.TimeoutException:
+            logger.warning("CC API request timed out (url=%s)", url)
+            raise TimeoutError_("Command Code API request timed out")
+        except httpx.RequestError as e:
+            logger.warning("CC API request failed: %s url=%s", e.__class__.__name__, url)
+            raise UpstreamError(f"Command Code API request failed: {e.__class__.__name__}")

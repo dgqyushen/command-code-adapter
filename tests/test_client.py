@@ -1,6 +1,7 @@
+import httpx
 import pytest
 from cc_adapter.client import CommandCodeClient, _parse_sse_line
-from cc_adapter.errors import AuthenticationError
+from cc_adapter.errors import AuthenticationError, UpstreamError
 
 
 @pytest.mark.asyncio
@@ -71,3 +72,40 @@ def test_client_rejects_non_object_json(caplog):
 
     assert _parse_sse_line('data: ["not", "an", "event"]') is None
     assert any("not a JSON object" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_client_reuses_injected_http_client():
+    injected = httpx.AsyncClient()
+    client = CommandCodeClient(base_url="https://api.commandcode.ai", api_key="test", http_client=injected)
+    assert client._client() is injected
+    assert client._client() is injected
+
+
+@pytest.mark.asyncio
+async def test_client_connect_error_maps_to_upstream_error():
+    from unittest.mock import patch
+
+    with patch.object(httpx.AsyncClient, "stream") as mock_stream:
+        mock_stream.side_effect = httpx.ConnectError("Connection refused")
+        client = CommandCodeClient(base_url="https://api.commandcode.ai", api_key="test")
+        with pytest.raises(UpstreamError, match="Command Code API request failed: ConnectError"):
+            async for _ in client.generate({"params": {"model": "test", "messages": []}}):
+                pass
+
+
+@pytest.mark.asyncio
+async def test_client_aclose_cleans_up_owned_client():
+    client = CommandCodeClient(base_url="https://api.commandcode.ai", api_key="test")
+    http_client = client._client()
+    assert not http_client.is_closed
+    await client.aclose()
+    assert http_client.is_closed
+
+
+@pytest.mark.asyncio
+async def test_client_aclose_does_not_close_injected_client():
+    injected = httpx.AsyncClient()
+    client = CommandCodeClient(base_url="https://api.commandcode.ai", api_key="test", http_client=injected)
+    await client.aclose()
+    assert not injected.is_closed

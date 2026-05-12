@@ -58,3 +58,18 @@ async def test_chat_completions_no_auth_when_access_key_empty():
         )
     assert resp.status_code in (200, 401, 502)
     _clear_state()
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_falls_back_to_module_client():
+    _clear_state()
+    from cc_adapter.admin.state import init as admin_state_init
+
+    cfg = AppConfig(access_key="")
+    admin_state_init(cfg, None)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={"model": "test", "messages": [{"role": "user", "content": "hi"}]},
+        )
+    assert resp.status_code in (200, 401, 502)

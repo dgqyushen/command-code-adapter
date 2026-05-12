@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Request
@@ -36,14 +37,26 @@ async def _anthropic_stream_with_retry(
     for attempt in range(2):
         cc_stream = client.generate(body, headers)
         translator = translate_anthropic_stream(cc_stream, model)
-        should_retry = False
-        async for chunk in translator:
-            should_retry = True
-            yield chunk
-        if not should_retry and attempt == 0:
-            logger.warning("Empty upstream response in anthropic stream (attempt 1/2), retrying...")
-            continue
+        yielded_any = False
+        try:
+            async for chunk in translator:
+                yielded_any = True
+                yield chunk
+        except AdapterError as e:
+            logger.warning("Anthropic stream AdapterError: %s (attempt %d/2)", e.message, attempt + 1)
+            if not yielded_any and attempt == 0:
+                continue
+            yield _anthropic_sse_error(e.message)
+            return
         return
+
+
+def _anthropic_sse_error(message: str) -> str:
+    data = json.dumps(
+        {"type": "error", "error": {"type": "api_error", "message": message}},
+        ensure_ascii=False,
+    )
+    return f"event: error\ndata: {data}\n\n"
 
 
 async def _anthropic_nonstream_with_retry(

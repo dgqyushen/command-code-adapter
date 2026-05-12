@@ -65,7 +65,8 @@ def _apply_config_fields(cfg: AppConfig, updates: dict[str, object]) -> bool:
 async def verify_auth(authorization: str | None = Header(None)):
     cfg = get_config()
     if not cfg or not cfg.admin_password:
-        return True
+        logger.warning("Admin auth blocked: CC_ADAPTER_ADMIN_PASSWORD is not configured")
+        raise HTTPException(status_code=503, detail="Admin password is not configured")
     if not authorization or not authorization.startswith("Bearer "):
         logger.warning("Admin auth failed: missing or malformed Authorization header")
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -80,7 +81,7 @@ async def verify_auth(authorization: str | None = Header(None)):
 async def login(req: LoginRequest):
     cfg = get_config()
     if not cfg or not cfg.admin_password:
-        return LoginResponse(token="")
+        raise HTTPException(status_code=503, detail="Admin password is not configured")
     if req.password != cfg.admin_password:
         logger.warning("Admin login failed: invalid password")
         raise HTTPException(status_code=401, detail="Invalid password")
@@ -165,9 +166,7 @@ async def update_config(update: ConfigUpdate, _=Depends(verify_auth)):
 
 @router.get("/config/raw")
 async def get_raw_config(_=Depends(verify_auth)):
-    env_path = Path(".env")
-    content = env_path.read_text() if env_path.exists() else ""
-    return {"content": content}
+    raise HTTPException(status_code=410, detail="Raw config editing is no longer available")
 
 
 class RawConfigUpdate(BaseModel):
@@ -176,17 +175,7 @@ class RawConfigUpdate(BaseModel):
 
 @router.put("/config/raw")
 async def update_raw_config(update: RawConfigUpdate, _=Depends(verify_auth)):
-    env_path = Path(".env")
-    env_path.write_text(update.content)
-
-    cfg = get_config()
-    if cfg:
-        new_cfg = AppConfig(_env_file=".env")
-        changed_client = _apply_config_fields(cfg, {field: getattr(new_cfg, field) for field in _CONFIG_FIELDS})
-        if changed_client:
-            _recreate_client(cfg)
-
-    return {"content": update.content}
+    raise HTTPException(status_code=410, detail="Raw config editing is no longer available")
 
 
 @router.post("/verify-key")
