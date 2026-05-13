@@ -46,6 +46,7 @@ docker compose up -d
 | `CC_ADAPTER_HOST` | `0.0.0.0` | 监听地址 |
 | `CC_ADAPTER_PORT` | `8080` | 监听端口 |
 | `CC_ADAPTER_LOG_LEVEL` | `INFO` | 日志级别 |
+| `CC_ADAPTER_LOG_FORMAT` | `console` | 日志格式：`console` 或 `json` |
 | `CC_ADAPTER_ADMIN_PASSWORD` | — | 管理面板密码（留空则无需认证） |
 | `CC_ADAPTER_ACCESS_KEY` | — | `/v1/chat/completions` 访问密钥（留空则无需认证） |
 | `CC_ADAPTER_DEFAULT_MODEL` | `deepseek/deepseek-v4-flash` | 管理面板 Playground 默认模型 |
@@ -171,6 +172,23 @@ cc_adapter/
     └── ...                #   管理界面
 ```
 
+---
+
+## English
+
+### Quick Start
+
+```bash
+# Install dependencies
+poetry install
+
+# Configure API Key
+export CC_ADAPTER_CC_API_KEY=user_your_key_here
+
+# Start server
+poetry run python -m cc_adapter
+```
+
 Once started, visit `http://localhost:8080`. The admin panel is at `http://localhost:8080/admin`.
 
 ### Docker
@@ -194,6 +212,7 @@ docker compose up -d
 | `CC_ADAPTER_HOST` | `0.0.0.0` | Listen address |
 | `CC_ADAPTER_PORT` | `8080` | Listen port |
 | `CC_ADAPTER_LOG_LEVEL` | `INFO` | Log level |
+| `CC_ADAPTER_LOG_FORMAT` | `console` | Log format: `console` or `json` |
 | `CC_ADAPTER_ADMIN_PASSWORD` | — | Admin panel password (leave blank for no auth) |
 | `CC_ADAPTER_ACCESS_KEY` | — | `/v1/chat/completions` access key (leave blank for no auth) |
 | `CC_ADAPTER_DEFAULT_MODEL` | `deepseek/deepseek-v4-flash` | Admin Playground default model |

@@ -177,7 +177,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
         "openai.request",
         model=req.model,
         stream=str(req.stream),
-        messages=len(req.messages),
+        message_count=len(req.messages),
         tools="yes" if req.tools else "no",
         tool_choice=req.tool_choice,
     )

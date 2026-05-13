@@ -25,13 +25,13 @@ def _parse_sse_line(raw: str) -> dict[str, Any] | None:
         parsed = json.loads(line)
     except ValueError as e:
         preview = raw[:60]
-        logger.debug("Failed to parse CC event line %r: %s", preview, e)
+        logger.debug("sse.parse_error", preview=preview, error=str(e))
         return None
     if not isinstance(parsed, dict):
         preview = raw[:60]
-        logger.debug("Failed to parse CC event line %r: not a JSON object", preview)
+        logger.debug("sse.parse_error", preview=preview, error="not_a_json_object")
         return None
-    logger.debug("CC raw event: type=%s", parsed.get("type", "?"))
+    logger.debug("sse.raw_event", event_type=parsed.get("type", "?"))
     return parsed
 
 

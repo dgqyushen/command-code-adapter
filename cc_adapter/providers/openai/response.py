@@ -152,7 +152,9 @@ async def translate_stream(
 
             elif event_type == "tool-call":
                 emitted_visible = True
-                logger.debug("CC tool-call event: %s", event)
+                logger.debug(
+                    "tool-call received", tool_name=event.get("toolName", ""), tool_call_id=event.get("toolCallId", "")
+                )
                 tool_call = _make_tool_call(event, tool_call_index, include_index=True)
                 logger.info(
                     "tool.call",
@@ -224,7 +226,9 @@ async def collect_and_translate_nonstream(
             reasoning_parts.append(event.get("text") or "")
 
         elif event_type == "tool-call":
-            logger.debug("CC tool-call event (nonstream): %s", event)
+            logger.debug(
+                "tool-call received", tool_name=event.get("toolName", ""), tool_call_id=event.get("toolCallId", "")
+            )
             tc = _make_tool_call(event, tool_call_index)
             logger.info(
                 "tool.call",

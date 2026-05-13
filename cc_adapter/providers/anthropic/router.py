@@ -107,7 +107,7 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
         "anthropic.request",
         model=req.model,
         stream=str(req.stream),
-        messages=len(req.messages),
+        message_count=len(req.messages),
         tools="yes" if req.tools else "no",
     )
 

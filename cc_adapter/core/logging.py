@@ -151,6 +151,8 @@ def configure_logging(*, log_format: str, log_level: str | int) -> None:
     root_logger.setLevel(log_level)
 
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 class CorrelationIDMiddleware(BaseHTTPMiddleware):
