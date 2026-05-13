@@ -153,7 +153,7 @@ async def translate_stream(
             elif event_type == "tool-call":
                 emitted_visible = True
                 logger.debug(
-                    "tool-call received", tool_name=event.get("toolName", ""), tool_call_id=event.get("toolCallId", "")
+                    "tool.call.debug", tool_name=event.get("toolName", ""), tool_call_id=event.get("toolCallId", "")
                 )
                 tool_call = _make_tool_call(event, tool_call_index, include_index=True)
                 logger.info(
