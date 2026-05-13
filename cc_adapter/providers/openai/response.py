@@ -227,7 +227,7 @@ async def collect_and_translate_nonstream(
 
         elif event_type == "tool-call":
             logger.debug(
-                "tool-call received", tool_name=event.get("toolName", ""), tool_call_id=event.get("toolCallId", "")
+                "tool.call.debug", tool_name=event.get("toolName", ""), tool_call_id=event.get("toolCallId", "")
             )
             tc = _make_tool_call(event, tool_call_index)
             logger.info(
