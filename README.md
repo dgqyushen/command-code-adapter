@@ -62,9 +62,9 @@ docker compose up -d
 ```
 07:42:18 INFO  app.start        base=https://api.commandcode.ai port=8080
 07:42:31 INFO  openai.request   model=deepseek-v4-flash stream=true message_count=3 tools=true req=8f3a91c2
-07:42:33 WARN  upstream.retry   reason=empty_response attempt=1 max_attempts=2 req=8f3a91c2
+07:42:33 WARNING  upstream.retry   reason=empty_response attempt=1 max_attempts=2 req=8f3a91c2
 07:42:34 INFO  upstream.usage   model=deepseek-v4-flash input=120 output=834 total=954 elapsed=2.1s req=8f3a91c2
-07:42:34 INFO  http.done        POST /v1/chat/completions 200 2.48s req=8f3a91c2
+07:42:34 INFO  http.done        method=POST path=/v1/chat/completions status_code=200 elapsed=2.48s req=8f3a91c2
 ```
 
 **JSON 格式** — 机器解析用结构化格式：
