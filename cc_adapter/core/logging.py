@@ -26,7 +26,6 @@ SENSITIVE_KEYS = {
     "filepath",
     "old_str",
     "new_str",
-    "path",
 }
 SENSITIVE_KEYS_LOWER = {k.lower() for k in SENSITIVE_KEYS}
 

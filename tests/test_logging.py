@@ -41,7 +41,7 @@ def test_filter_sensitive_data_redacts_tool_fields():
         "filePath": "/src/main.py",
         "oldString": "def foo():",
         "newString": "def bar():",
-        "path": "/src/main.py",
+        "filepath": "/src/main.py",
         "old_str": "foo",
         "new_str": "bar",
         "normal_field": "keep me",
@@ -50,7 +50,7 @@ def test_filter_sensitive_data_redacts_tool_fields():
     assert result["filePath"] == "***"
     assert result["oldString"] == "***"
     assert result["newString"] == "***"
-    assert result["path"] == "***"
+    assert result["filepath"] == "***"
     assert result["old_str"] == "***"
     assert result["new_str"] == "***"
     assert result["normal_field"] == "keep me"
