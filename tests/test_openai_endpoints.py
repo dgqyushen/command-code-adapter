@@ -23,6 +23,8 @@ async def test_v1_models_returns_all_19_models():
         assert "id" in model
         assert "created" in model
         assert "owned_by" in model
+        assert "context_length" in model
+        assert isinstance(model["context_length"], int)
 
 
 @pytest.mark.asyncio
