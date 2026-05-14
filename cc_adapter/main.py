@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import structlog
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -30,6 +31,13 @@ async def lifespan(app: FastAPI):
     logger.info("app.start", base=cfg.cc_base_url, port=cfg.port)
     if not cfg.cc_api_key:
         logger.warning("app.start", message="CC_ADAPTER_CC_API_KEY is not set")
+
+    # Warm up version check in background (non-blocking)
+    from cc_adapter.core.runtime import get_version_checker
+
+    checker = get_version_checker()
+    asyncio.ensure_future(checker.refresh())
+
     yield
     cc_client = get_runtime_client()
     if cc_client is not None:
