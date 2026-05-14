@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from cc_adapter.command_code.client import CommandCodeClient
     from cc_adapter.providers.openai.request import RequestTranslator
     from cc_adapter.providers.anthropic.request import AnthropicTranslator
+    from cc_adapter.core.version_checker import VersionChecker
 
 _config: AppConfig | None = None
 _cc_client: CommandCodeClient | None = None
@@ -56,3 +57,20 @@ def get_anthropic_translator() -> AnthropicTranslator | None:
 
         _anthropic_translator = AnthropicTranslator()
     return _anthropic_translator
+
+
+_version_checker: VersionChecker | None = None
+
+
+def get_version_checker() -> VersionChecker:
+    global _version_checker
+    if _version_checker is None:
+        from cc_adapter.core.version_checker import VersionChecker
+
+        _version_checker = VersionChecker()
+    return _version_checker
+
+
+def reset_version_checker() -> None:
+    global _version_checker
+    _version_checker = None

@@ -3,7 +3,16 @@ import asyncio
 import httpx
 import pytest
 
+from cc_adapter.core.runtime import get_version_checker, reset_version_checker
 from cc_adapter.core.version_checker import VersionChecker
+
+
+class TestRuntimeVersionChecker:
+    def test_get_version_checker_returns_singleton(self):
+        reset_version_checker()
+        c1 = get_version_checker()
+        c2 = get_version_checker()
+        assert c1 is c2
 
 
 class TestVersionChecker:
