@@ -84,7 +84,14 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    from cc_adapter.core.runtime import get_version_checker
+
+    checker = get_version_checker()
+    return {
+        "status": "ok",
+        "version": checker.get_version(),
+        "last_fetch": checker.last_fetch_time,
+    }
 
 
 def run():
