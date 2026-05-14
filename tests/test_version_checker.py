@@ -61,6 +61,16 @@ class TestVersionChecker:
         assert checker.get_version() == "0.25.2"
 
     @pytest.mark.asyncio
+    async def test_refresh_sets_fetch_time_even_when_version_missing(self, respx_mock):
+        route = respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
+            return_value=httpx.Response(200, json={"other": "data"})
+        )
+        checker = VersionChecker()
+        await checker.refresh()
+        assert checker.last_fetch_time is not None
+        assert checker.get_version() == "0.25.2"
+
+    @pytest.mark.asyncio
     async def test_get_version_does_not_trigger_duplicate_fetches(self, respx_mock):
         async def delayed_response(request):
             await asyncio.sleep(0.2)

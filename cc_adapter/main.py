@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import structlog
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -35,8 +34,7 @@ async def lifespan(app: FastAPI):
     # Warm up version check in background (non-blocking)
     from cc_adapter.core.runtime import get_version_checker
 
-    checker = get_version_checker()
-    asyncio.ensure_future(checker.refresh())
+    get_version_checker().get_version()  # triggers background fetch via _fetch_task guard
 
     yield
     cc_client = get_runtime_client()

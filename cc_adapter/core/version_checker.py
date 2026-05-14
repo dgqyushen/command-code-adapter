@@ -57,10 +57,10 @@ class VersionChecker:
                 if version:
                     logger.info("version.updated", old=self._cached_version, new=version)
                     self._cached_version = version
-                    self._last_fetch_time = time.monotonic()
-                    self._last_error = None
                 else:
                     logger.warning("version.missing_field", url=NPM_URL)
+                self._last_fetch_time = time.monotonic()
+                self._last_error = None
         except Exception as e:
             self._last_error = str(e)
             logger.warning("version.fetch_failed", error=str(e), url=NPM_URL)
