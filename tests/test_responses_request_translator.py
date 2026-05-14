@@ -71,7 +71,9 @@ async def test_tools(translator):
 
 @pytest.mark.asyncio
 async def test_tool_choice_auto(translator):
-    req = ResponseCreateRequest(model="deepseek-v4-flash", input="Hi", tools=[{"name": "Read", "input_schema": {}}], tool_choice="auto")
+    req = ResponseCreateRequest(
+        model="deepseek-v4-flash", input="Hi", tools=[{"name": "Read", "input_schema": {}}], tool_choice="auto"
+    )
     body, headers = translator.translate(req)
     assert body["params"]["tool_choice"] == {"type": "auto"}
 

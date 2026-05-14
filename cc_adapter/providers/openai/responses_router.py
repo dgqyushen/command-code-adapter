@@ -22,6 +22,7 @@ router = APIRouter()
 
 def _get_responses_translator():
     from cc_adapter.providers.openai.responses_request import ResponsesRequestTranslator
+
     return ResponsesRequestTranslator()
 
 
@@ -84,6 +85,7 @@ async def create_response(req: ResponseCreateRequest, request: Request):
     current_client = get_client()
     if current_client is None:
         from cc_adapter.command_code.client import CommandCodeClient
+
         current_client = CommandCodeClient(
             base_url=cfg.cc_base_url,
             api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "",

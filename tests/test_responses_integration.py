@@ -39,16 +39,9 @@ def _parse_sse(text: str) -> list[dict]:
     for block in text.strip().split("\n\n"):
         if not block.strip():
             continue
-        event_type = ""
-        data = {}
         for line in block.strip().split("\n"):
-            if line.startswith("event: "):
-                event_type = line[7:]
-            elif line.startswith("data: "):
-                data = json.loads(line[6:])
-        data["type"] = event_type
-        events.append(data)
-    return events
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
     return events
 
 
@@ -70,10 +63,12 @@ def _setup(
 
 @pytest.mark.asyncio
 async def test_nonstream_text_only(client):
-    _setup(events=[
-        {"type": "text-delta", "text": "Hello world"},
-        {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
-    ])
+    _setup(
+        events=[
+            {"type": "text-delta", "text": "Hello world"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
+        ]
+    )
     payload = {"model": "deepseek-v4-flash", "input": "Say hello", "stream": False}
     async with client as c:
         resp = await c.post("/v1/responses", json=payload)
@@ -89,11 +84,13 @@ async def test_nonstream_text_only(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_text_with_reasoning(client):
-    _setup(events=[
-        {"type": "reasoning-delta", "text": "Let me think..."},
-        {"type": "text-delta", "text": "The answer is 42"},
-        {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 20, "outputTokens": 15}},
-    ])
+    _setup(
+        events=[
+            {"type": "reasoning-delta", "text": "Let me think..."},
+            {"type": "text-delta", "text": "The answer is 42"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 20, "outputTokens": 15}},
+        ]
+    )
     payload = {"model": "deepseek-v4-flash", "input": "What is 6*7?", "stream": False}
     async with client as c:
         resp = await c.post("/v1/responses", json=payload)
@@ -107,14 +104,22 @@ async def test_nonstream_text_with_reasoning(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_tool_call(client):
-    _setup(events=[
-        {"type": "tool-call", "toolCallId": "call_abc", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
-    ])
+    _setup(
+        events=[
+            {"type": "tool-call", "toolCallId": "call_abc", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
+        ]
+    )
     payload = {
         "model": "deepseek-v4-flash",
         "input": "Read /tmp/test.txt",
-        "tools": [{"name": "Read", "description": "Read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read a file",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": False,
     }
     async with client as c:
@@ -129,15 +134,23 @@ async def test_nonstream_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_nonstream_text_and_tool_call(client):
-    _setup(events=[
-        {"type": "text-delta", "text": "Let me read that file"},
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 25}},
-    ])
+    _setup(
+        events=[
+            {"type": "text-delta", "text": "Let me read that file"},
+            {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"path": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 25}},
+        ]
+    )
     payload = {
         "model": "deepseek-v4-flash",
         "input": "read file",
-        "tools": [{"name": "Read", "description": "Read", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": False,
     }
     async with client as c:
@@ -154,11 +167,13 @@ async def test_nonstream_text_and_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_stream_text_only(client):
-    _setup(events=[
-        {"type": "text-delta", "text": "Hello"},
-        {"type": "text-delta", "text": " world"},
-        {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
-    ])
+    _setup(
+        events=[
+            {"type": "text-delta", "text": "Hello"},
+            {"type": "text-delta", "text": " world"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
+        ]
+    )
     payload = {"model": "deepseek-v4-flash", "input": "Say hi", "stream": True}
     async with client as c:
         resp = await c.post("/v1/responses", json=payload)
@@ -206,11 +221,13 @@ async def test_stream_empty_upstream_raises_error(client):
 
 @pytest.mark.asyncio
 async def test_stream_reasoning_then_text(client):
-    _setup(events=[
-        {"type": "reasoning-delta", "text": "Thinking..."},
-        {"type": "text-delta", "text": "Answer: 42"},
-        {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 8}},
-    ])
+    _setup(
+        events=[
+            {"type": "reasoning-delta", "text": "Thinking..."},
+            {"type": "text-delta", "text": "Answer: 42"},
+            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 8}},
+        ]
+    )
     payload = {"model": "deepseek-v4-flash", "input": "What is 6*7?", "stream": True}
     async with client as c:
         resp = await c.post("/v1/responses", json=payload)
@@ -225,14 +242,22 @@ async def test_stream_reasoning_then_text(client):
 
 @pytest.mark.asyncio
 async def test_stream_tool_call(client):
-    _setup(events=[
-        {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"filePath": "/tmp/test.txt"}},
-        {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
-    ])
+    _setup(
+        events=[
+            {"type": "tool-call", "toolCallId": "call_1", "toolName": "Read", "input": {"filePath": "/tmp/test.txt"}},
+            {"type": "finish", "finishReason": "tool_calls", "totalUsage": {"inputTokens": 50, "outputTokens": 20}},
+        ]
+    )
     payload = {
         "model": "deepseek-v4-flash",
         "input": "read file",
-        "tools": [{"name": "Read", "description": "Read", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}],
+        "tools": [
+            {
+                "name": "Read",
+                "description": "Read",
+                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            }
+        ],
         "stream": True,
     }
     async with client as c:
@@ -260,9 +285,11 @@ async def test_stream_tool_call(client):
 
 @pytest.mark.asyncio
 async def test_stream_error_event(client):
-    _setup(events=[
-        {"type": "error", "error": {"message": "Rate limit exceeded", "statusCode": 429}},
-    ])
+    _setup(
+        events=[
+            {"type": "error", "error": {"message": "Rate limit exceeded", "statusCode": 429}},
+        ]
+    )
     payload = {"model": "deepseek-v4-flash", "input": "hi", "stream": True}
     async with client as c:
         resp = await c.post("/v1/responses", json=payload)

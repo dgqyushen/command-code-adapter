@@ -26,7 +26,8 @@ def _generate_fc_id() -> str:
 
 
 def _sse(event_type: str, data: dict) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+    payload = {"type": event_type, **data}
+    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
 
 
 def _parse_usage(raw_usage: dict | None) -> dict | None:
@@ -70,54 +71,69 @@ async def translate_responses_stream(
     def close_current_item():
         nonlocal output_index, seq, current_item_type, current_item_id_val
         if current_item_type == "reasoning":
-            yield _sse("response.content_part.done", {
-                "content_index": 0,
-                "item_id": current_item_id_val,
-                "output_index": output_index,
-                "part": {"type": "reasoning_text", "text": "".join(reasoning_buf)},
-                "sequence_number": seq,
-            })
-            seq += 1
-            yield _sse("response.output_item.done", {
-                "output_index": output_index,
-                "item": {
-                    "type": "reasoning",
-                    "id": current_item_id_val,
-                    "content": [{"type": "reasoning_text", "text": "".join(reasoning_buf)}],
-                    "status": "completed",
+            yield _sse(
+                "response.content_part.done",
+                {
+                    "content_index": 0,
+                    "item_id": current_item_id_val,
+                    "output_index": output_index,
+                    "part": {"type": "reasoning_text", "text": "".join(reasoning_buf)},
+                    "sequence_number": seq,
                 },
-                "sequence_number": seq,
-            })
+            )
+            seq += 1
+            yield _sse(
+                "response.output_item.done",
+                {
+                    "output_index": output_index,
+                    "item": {
+                        "type": "reasoning",
+                        "id": current_item_id_val,
+                        "content": [{"type": "reasoning_text", "text": "".join(reasoning_buf)}],
+                        "status": "completed",
+                    },
+                    "sequence_number": seq,
+                },
+            )
             seq += 1
             output_index += 1
         elif current_item_type == "text":
-            yield _sse("response.content_part.done", {
-                "content_index": 0,
-                "item_id": current_item_id_val,
-                "output_index": output_index,
-                "part": {"type": "output_text", "text": "".join(text_buf), "annotations": []},
-                "sequence_number": seq,
-            })
-            seq += 1
-            yield _sse("response.output_text.done", {
-                "content_index": 0,
-                "item_id": current_item_id_val,
-                "output_index": output_index,
-                "text": "".join(text_buf),
-                "sequence_number": seq,
-            })
-            seq += 1
-            yield _sse("response.output_item.done", {
-                "output_index": output_index,
-                "item": {
-                    "type": "message",
-                    "id": current_item_id_val,
-                    "role": "assistant",
-                    "status": "completed",
-                    "content": [{"type": "output_text", "text": "".join(text_buf), "annotations": []}],
+            yield _sse(
+                "response.content_part.done",
+                {
+                    "content_index": 0,
+                    "item_id": current_item_id_val,
+                    "output_index": output_index,
+                    "part": {"type": "output_text", "text": "".join(text_buf), "annotations": []},
+                    "sequence_number": seq,
                 },
-                "sequence_number": seq,
-            })
+            )
+            seq += 1
+            yield _sse(
+                "response.output_text.done",
+                {
+                    "content_index": 0,
+                    "item_id": current_item_id_val,
+                    "output_index": output_index,
+                    "text": "".join(text_buf),
+                    "sequence_number": seq,
+                },
+            )
+            seq += 1
+            yield _sse(
+                "response.output_item.done",
+                {
+                    "output_index": output_index,
+                    "item": {
+                        "type": "message",
+                        "id": current_item_id_val,
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [{"type": "output_text", "text": "".join(text_buf), "annotations": []}],
+                    },
+                    "sequence_number": seq,
+                },
+            )
             seq += 1
             output_index += 1
         elif current_item_type == "fc":
@@ -131,8 +147,13 @@ async def translate_responses_stream(
         current_item_type_val = item_type
 
     partial = {
-        "id": response_id, "object": "response", "status": "in_progress",
-        "created_at": created, "model": model, "output": [], "usage": None,
+        "id": response_id,
+        "object": "response",
+        "status": "in_progress",
+        "created_at": created,
+        "model": model,
+        "output": [],
+        "usage": None,
     }
     bootstrap_done = False
 
@@ -161,23 +182,37 @@ async def translate_responses_stream(
                         yield chunk
                 reasoning_item_id = _generate_rs_id()
                 set_current_item("reasoning", reasoning_item_id)
-                yield _sse("response.output_item.added", {
-                    "output_index": output_index,
-                    "item": {"type": "reasoning", "id": reasoning_item_id, "content": [], "status": "in_progress"},
-                    "sequence_number": seq,
-                })
+                yield _sse(
+                    "response.output_item.added",
+                    {
+                        "output_index": output_index,
+                        "item": {"type": "reasoning", "id": reasoning_item_id, "content": [], "status": "in_progress"},
+                        "sequence_number": seq,
+                    },
+                )
                 seq += 1
-                yield _sse("response.content_part.added", {
-                    "content_index": 0, "item_id": reasoning_item_id, "output_index": output_index,
-                    "part": {"type": "reasoning_text", "text": ""},
-                    "sequence_number": seq,
-                })
+                yield _sse(
+                    "response.content_part.added",
+                    {
+                        "content_index": 0,
+                        "item_id": reasoning_item_id,
+                        "output_index": output_index,
+                        "part": {"type": "reasoning_text", "text": ""},
+                        "sequence_number": seq,
+                    },
+                )
                 seq += 1
             reasoning_buf.append(text)
-            yield _sse("response.reasoning_text.delta", {
-                "delta": text, "content_index": 0, "item_id": current_item_id_val, "output_index": output_index,
-                "sequence_number": seq,
-            })
+            yield _sse(
+                "response.reasoning_text.delta",
+                {
+                    "delta": text,
+                    "content_index": 0,
+                    "item_id": current_item_id_val,
+                    "output_index": output_index,
+                    "sequence_number": seq,
+                },
+            )
             seq += 1
 
         elif event_type == "text-delta":
@@ -193,26 +228,43 @@ async def translate_responses_stream(
                         yield chunk
                 text_item_id = _generate_msg_id()
                 set_current_item("text", text_item_id)
-                yield _sse("response.output_item.added", {
-                    "output_index": output_index,
-                    "item": {
-                        "type": "message", "id": text_item_id, "role": "assistant",
-                        "status": "in_progress", "content": [],
+                yield _sse(
+                    "response.output_item.added",
+                    {
+                        "output_index": output_index,
+                        "item": {
+                            "type": "message",
+                            "id": text_item_id,
+                            "role": "assistant",
+                            "status": "in_progress",
+                            "content": [],
+                        },
+                        "sequence_number": seq,
                     },
-                    "sequence_number": seq,
-                })
+                )
                 seq += 1
-                yield _sse("response.content_part.added", {
-                    "content_index": 0, "item_id": text_item_id, "output_index": output_index,
-                    "part": {"type": "output_text", "text": "", "annotations": []},
-                    "sequence_number": seq,
-                })
+                yield _sse(
+                    "response.content_part.added",
+                    {
+                        "content_index": 0,
+                        "item_id": text_item_id,
+                        "output_index": output_index,
+                        "part": {"type": "output_text", "text": "", "annotations": []},
+                        "sequence_number": seq,
+                    },
+                )
                 seq += 1
             text_buf.append(text)
-            yield _sse("response.output_text.delta", {
-                "delta": text, "content_index": 0, "item_id": current_item_id_val, "output_index": output_index,
-                "sequence_number": seq,
-            })
+            yield _sse(
+                "response.output_text.delta",
+                {
+                    "delta": text,
+                    "content_index": 0,
+                    "item_id": current_item_id_val,
+                    "output_index": output_index,
+                    "sequence_number": seq,
+                },
+            )
             seq += 1
 
         elif event_type == "tool-call":
@@ -235,36 +287,61 @@ async def translate_responses_stream(
             fc_args.append(args_str)
             set_current_item("fc", fc_id)
 
-            yield _sse("response.output_item.added", {
-                "output_index": output_index,
-                "item": {
-                    "type": "function_call", "id": fc_id, "call_id": tool_call_id,
-                    "name": tool_name, "arguments": "", "status": "in_progress",
+            yield _sse(
+                "response.output_item.added",
+                {
+                    "output_index": output_index,
+                    "item": {
+                        "type": "function_call",
+                        "id": fc_id,
+                        "call_id": tool_call_id,
+                        "name": tool_name,
+                        "arguments": "",
+                        "status": "in_progress",
+                    },
+                    "sequence_number": seq,
                 },
-                "sequence_number": seq,
-            })
+            )
             seq += 1
 
-            yield _sse("response.function_call_arguments.delta", {
-                "delta": args_str, "item_id": fc_id, "output_index": output_index,
-                "sequence_number": seq,
-            })
-            seq += 1
-
-            yield _sse("response.function_call_arguments.done", {
-                "arguments": args_str, "item_id": fc_id, "name": tool_name, "output_index": output_index,
-                "sequence_number": seq,
-            })
-            seq += 1
-
-            yield _sse("response.output_item.done", {
-                "output_index": output_index,
-                "item": {
-                    "type": "function_call", "id": fc_id, "call_id": tool_call_id,
-                    "name": tool_name, "arguments": args_str, "status": "completed",
+            yield _sse(
+                "response.function_call_arguments.delta",
+                {
+                    "delta": args_str,
+                    "item_id": fc_id,
+                    "output_index": output_index,
+                    "sequence_number": seq,
                 },
-                "sequence_number": seq,
-            })
+            )
+            seq += 1
+
+            yield _sse(
+                "response.function_call_arguments.done",
+                {
+                    "arguments": args_str,
+                    "item_id": fc_id,
+                    "name": tool_name,
+                    "output_index": output_index,
+                    "sequence_number": seq,
+                },
+            )
+            seq += 1
+
+            yield _sse(
+                "response.output_item.done",
+                {
+                    "output_index": output_index,
+                    "item": {
+                        "type": "function_call",
+                        "id": fc_id,
+                        "call_id": tool_call_id,
+                        "name": tool_name,
+                        "arguments": args_str,
+                        "status": "completed",
+                    },
+                    "sequence_number": seq,
+                },
+            )
             seq += 1
             output_index += 1
             current_item_type = None
@@ -284,54 +361,79 @@ async def translate_responses_stream(
             output_items: list[dict] = []
             if reasoning_buf:
                 rs_id = reasoning_item_id or _generate_rs_id()
-                output_items.append({
-                    "type": "reasoning", "id": rs_id,
-                    "content": [{"type": "reasoning_text", "text": "".join(reasoning_buf)}],
-                    "status": "completed",
-                })
+                output_items.append(
+                    {
+                        "type": "reasoning",
+                        "id": rs_id,
+                        "content": [{"type": "reasoning_text", "text": "".join(reasoning_buf)}],
+                        "status": "completed",
+                    }
+                )
             if full_text:
                 msg_id = text_item_id or _generate_msg_id()
-                output_items.append({
-                    "type": "message", "id": msg_id, "role": "assistant",
-                    "status": "completed",
-                    "content": [{"type": "output_text", "text": full_text, "annotations": []}],
-                })
+                output_items.append(
+                    {
+                        "type": "message",
+                        "id": msg_id,
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [{"type": "output_text", "text": full_text, "annotations": []}],
+                    }
+                )
             for i, fc_id in enumerate(fc_item_ids):
-                output_items.append({
-                    "type": "function_call", "id": fc_id,
-                    "call_id": fc_call_ids[i] if i < len(fc_call_ids) else f"call_{uuid.uuid4().hex[:8]}",
-                    "name": fc_names[i] if i < len(fc_names) else "",
-                    "arguments": fc_args[i] if i < len(fc_args) else "{}",
-                    "status": "completed",
-                })
+                output_items.append(
+                    {
+                        "type": "function_call",
+                        "id": fc_id,
+                        "call_id": fc_call_ids[i] if i < len(fc_call_ids) else f"call_{uuid.uuid4().hex[:8]}",
+                        "name": fc_names[i] if i < len(fc_names) else "",
+                        "arguments": fc_args[i] if i < len(fc_args) else "{}",
+                        "status": "completed",
+                    }
+                )
 
-            yield _sse("response.completed", {
-                "response": {
-                    "id": response_id, "object": "response", "status": "completed",
-                    "created_at": created, "completed_at": time.time(),
-                    "model": model, "output": output_items,
-                    "usage": usage, "output_text": full_text,
+            yield _sse(
+                "response.completed",
+                {
+                    "response": {
+                        "id": response_id,
+                        "object": "response",
+                        "status": "completed",
+                        "created_at": created,
+                        "completed_at": time.time(),
+                        "model": model,
+                        "output": output_items,
+                        "usage": usage,
+                        "output_text": full_text,
+                    },
+                    "sequence_number": seq,
                 },
-                "sequence_number": seq,
-            })
+            )
             return
 
         elif event_type == "error":
             err = event.get("error") or {}
             message = err.get("message", "Unknown error")
-            yield _sse("error", {
-                "code": str(err.get("statusCode", 502)), "message": message,
-                "sequence_number": seq,
-            })
+            yield _sse(
+                "error",
+                {
+                    "code": str(err.get("statusCode", 502)),
+                    "message": message,
+                    "sequence_number": seq,
+                },
+            )
             return
 
     if not has_any_output:
         raise AdapterError(message="Upstream model returned an empty response", status_code=502)
 
-    yield _sse("error", {
-        "message": "Upstream stream ended before finish",
-        "sequence_number": seq,
-    })
+    yield _sse(
+        "error",
+        {
+            "message": "Upstream stream ended before finish",
+            "sequence_number": seq,
+        },
+    )
 
 
 async def collect_and_translate_responses_nonstream(
@@ -385,24 +487,36 @@ async def collect_and_translate_responses_nonstream(
     output_items: list[dict] = []
 
     if reasoning_parts:
-        output_items.append({
-            "type": "reasoning", "id": _generate_rs_id(),
-            "content": [{"type": "reasoning_text", "text": "".join(reasoning_parts)}],
-            "status": "completed",
-        })
+        output_items.append(
+            {
+                "type": "reasoning",
+                "id": _generate_rs_id(),
+                "content": [{"type": "reasoning_text", "text": "".join(reasoning_parts)}],
+                "status": "completed",
+            }
+        )
 
     if text:
-        output_items.append({
-            "type": "message", "id": _generate_msg_id(), "role": "assistant",
-            "status": "completed",
-            "content": [{"type": "output_text", "text": text, "annotations": []}],
-        })
+        output_items.append(
+            {
+                "type": "message",
+                "id": _generate_msg_id(),
+                "role": "assistant",
+                "status": "completed",
+                "content": [{"type": "output_text", "text": text, "annotations": []}],
+            }
+        )
 
     output_items.extend(tool_calls)
 
     return {
-        "id": response_id, "object": "response", "status": "completed",
-        "created_at": created, "completed_at": time.time(),
-        "model": model, "output": output_items,
-        "usage": usage, "output_text": text,
+        "id": response_id,
+        "object": "response",
+        "status": "completed",
+        "created_at": created,
+        "completed_at": time.time(),
+        "model": model,
+        "output": output_items,
+        "usage": usage,
+        "output_text": text,
     }

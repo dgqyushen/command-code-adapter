@@ -77,7 +77,9 @@ class ResponsesRequestTranslator:
                 if is_deepseek_v4_model(model_id) and effort in ("xhigh", "max"):
                     params["reasoning_effort"] = "max"
                     current_system = params.get("system", "")
-                    params["system"] = f"{REASONING_EFFORT_MAX}{current_system}" if current_system else REASONING_EFFORT_MAX
+                    params["system"] = (
+                        f"{REASONING_EFFORT_MAX}{current_system}" if current_system else REASONING_EFFORT_MAX
+                    )
                 else:
                     params["reasoning_effort"] = effort
                     instruction = REASONING_EFFORT_MAP.get(effort, "")
@@ -85,13 +87,20 @@ class ResponsesRequestTranslator:
                         current_system = params.get("system", "")
                         params["system"] = f"{current_system}\n{instruction}" if current_system else instruction
         if req.tools:
+            function_tools = []
+            for t in req.tools:
+                tool_type = t.get("type", "function")
+                if tool_type != "function":
+                    logger.warning("Unsupported built-in tool type skipped: %s", tool_type)
+                    continue
+                function_tools.append(t)
             params["tools"] = [
                 {
                     "name": t.get("name", ""),
                     "description": t.get("description"),
                     "input_schema": normalize_schema(t.get("input_schema", t.get("parameters", {}))),
                 }
-                for t in req.tools
+                for t in function_tools
             ]
         tool_choice = self._translate_tool_choice(req.tool_choice)
         if tool_choice is not None:
@@ -126,9 +135,7 @@ class ResponsesRequestTranslator:
                 messages.extend(translated)
         return messages
 
-    def _translate_input_item(
-        self, item: dict[str, Any], tool_names: dict[str, str]
-    ) -> list[dict[str, Any]] | None:
+    def _translate_input_item(self, item: dict[str, Any], tool_names: dict[str, str]) -> list[dict[str, Any]] | None:
         item_type = item.get("type", "")
         if item_type == "message":
             return self._translate_message_item(item, tool_names)
@@ -142,9 +149,7 @@ class ResponsesRequestTranslator:
             logger.warning("Unsupported input item type skipped: %s", item_type)
             return None
 
-    def _translate_message_item(
-        self, item: dict[str, Any], tool_names: dict[str, str]
-    ) -> list[dict[str, Any]]:
+    def _translate_message_item(self, item: dict[str, Any], tool_names: dict[str, str]) -> list[dict[str, Any]]:
         role = item.get("role", "user")
         content_raw = item.get("content", "")
         content_blocks: list[dict[str, Any]] = []
@@ -163,19 +168,19 @@ class ResponsesRequestTranslator:
             for tool_call in item.get("tool_calls") or []:
                 tid = tool_call.get("id", "")
                 tool_names[tid] = tool_call.get("function", {}).get("name", "")
-                content_blocks.append({
-                    "type": "tool-call",
-                    "toolCallId": tid,
-                    "toolName": tool_call.get("function", {}).get("name", ""),
-                    "input": normalize_input_args(
-                        self._parse_json_args(tool_call.get("function", {}).get("arguments", "{}"))
-                    ),
-                })
+                content_blocks.append(
+                    {
+                        "type": "tool-call",
+                        "toolCallId": tid,
+                        "toolName": tool_call.get("function", {}).get("name", ""),
+                        "input": normalize_input_args(
+                            self._parse_json_args(tool_call.get("function", {}).get("arguments", "{}"))
+                        ),
+                    }
+                )
         return [{"role": role, "content": content_blocks}]
 
-    def _translate_function_call_item(
-        self, item: dict[str, Any], tool_names: dict[str, str]
-    ) -> list[dict[str, Any]]:
+    def _translate_function_call_item(self, item: dict[str, Any], tool_names: dict[str, str]) -> list[dict[str, Any]]:
         call_id = item.get("call_id", "")
         name = item.get("name", "")
         tool_names[call_id] = name

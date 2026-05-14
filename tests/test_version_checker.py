@@ -87,9 +87,7 @@ class TestVersionChecker:
     @pytest.mark.asyncio
     async def test_failure_sets_fetch_time_for_error_backoff(self, respx_mock):
         """After failure, _last_fetch_time is set so _is_stale uses ERROR_BACKOFF."""
-        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
-            side_effect=httpx.RequestError("down")
-        )
+        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(side_effect=httpx.RequestError("down"))
         checker = VersionChecker()
         await checker.refresh()
         assert checker.last_fetch_time is not None
@@ -101,9 +99,7 @@ class TestVersionChecker:
             await asyncio.sleep(0.1)
             return httpx.Response(200, json={"version": "0.28.0"})
 
-        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
-            side_effect=delayed
-        )
+        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(side_effect=delayed)
         checker = VersionChecker()
         checker._last_fetch_time = 0.0  # stale
         checker.get_version()  # triggers background fetch
@@ -117,9 +113,7 @@ class TestVersionChecker:
             await asyncio.sleep(0.2)
             return httpx.Response(200, json={"version": "0.26.3"})
 
-        route = respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
-            side_effect=delayed_response
-        )
+        route = respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(side_effect=delayed_response)
         checker = VersionChecker()
         checker._last_fetch_time = 0.0  # stale
 
