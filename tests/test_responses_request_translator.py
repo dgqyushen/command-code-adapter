@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from cc_adapter.core.errors import AdapterError
 from cc_adapter.providers.openai.responses_request import ResponsesRequestTranslator
 from cc_adapter.providers.openai.responses_models import ResponseCreateRequest
 
@@ -124,3 +125,63 @@ async def test_unknown_model_passthrough(translator):
     req = ResponseCreateRequest(model="unknown-model-42", input="Hi")
     body, headers = translator.translate(req)
     assert body["params"]["model"] == "unknown-model-42"
+
+
+@pytest.mark.asyncio
+async def test_output_text_content_block_not_stringified(translator):
+    req = ResponseCreateRequest(
+        model="deepseek-v4-flash",
+        input=[
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "Previous answer"}],
+            },
+            {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Tell me more"}]},
+        ],
+    )
+    body, headers = translator.translate(req)
+    msgs = body["params"]["messages"]
+    assert len(msgs) == 2
+    assert msgs[0]["content"][0]["type"] == "text"
+    assert msgs[0]["content"][0]["text"] == "Previous answer"
+
+
+@pytest.mark.asyncio
+async def test_previous_response_id_raises_400(translator):
+    req = ResponseCreateRequest(model="deepseek-v4-flash", input="Hi", previous_response_id="resp_prev")
+    with pytest.raises(AdapterError) as exc:
+        translator.translate(req)
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_response_format_raises_400(translator):
+    req = ResponseCreateRequest(model="deepseek-v4-flash", input="Hi", response_format={"type": "json_object"})
+    with pytest.raises(AdapterError) as exc:
+        translator.translate(req)
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_built_in_tool_raises_400(translator):
+    req = ResponseCreateRequest(
+        model="deepseek-v4-flash",
+        input="search",
+        tools=[{"type": "web_search_preview"}],
+    )
+    with pytest.raises(AdapterError) as exc:
+        translator.translate(req)
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_function_tool_passes_validation(translator):
+    req = ResponseCreateRequest(
+        model="deepseek-v4-flash",
+        input="do it",
+        tools=[{"name": "my_func", "input_schema": {"type": "object", "properties": {}}}],
+    )
+    body, headers = translator.translate(req)
+    assert len(body["params"]["tools"]) == 1
+    assert body["params"]["tools"][0]["name"] == "my_func"

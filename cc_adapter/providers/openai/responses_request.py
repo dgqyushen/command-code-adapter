@@ -8,6 +8,7 @@ import structlog
 from cc_adapter.providers.openai.responses_models import ResponseCreateRequest
 from cc_adapter.command_code.body import _make_config, make_cc_body
 from cc_adapter.command_code.headers import make_cc_headers
+from cc_adapter.core.errors import AdapterError
 from cc_adapter.providers.shared.model_mapping import (
     MODEL_PROVIDER_MAP,
     REASONING_EFFORT_MAX,
@@ -23,7 +24,6 @@ RESPONSES_NOT_SUPPORTED = {
     "store": "store",
     "metadata": "metadata",
     "user": "user",
-    "response_format": "response_format",
     "truncation": "truncation",
     "service_tier": "service_tier",
     "parallel_tool_calls": "parallel_tool_calls",
@@ -34,17 +34,23 @@ RESPONSES_NOT_SUPPORTED = {
     "prompt_cache_retention": "prompt_cache_retention",
     "background": "background",
     "top_logprobs": "top_logprobs",
+    "context_management": "context_management",
+}
+
+RESPONSES_SESSION_PARAMS = {
     "previous_response_id": "previous_response_id",
     "conversation": "conversation",
     "prompt": "prompt",
-    "context_management": "context_management",
+    "response_format": "response_format",
     "text": "text",
 }
 
 
 class ResponsesRequestTranslator:
     def translate(self, req: ResponseCreateRequest) -> tuple[dict[str, Any], dict[str, Any]]:
+        self._validate_session_params(req)
         self._warn_unsupported(req)
+        self._validate_tools(req)
         cc_body = self._build_body(req)
         cc_headers = make_cc_headers()
         return cc_body, cc_headers
@@ -54,6 +60,28 @@ class ResponsesRequestTranslator:
             value = getattr(req, attr, None)
             if value is not None:
                 logger.warning("Unsupported Responses parameter ignored: %s = %s", attr, value)
+
+    @staticmethod
+    def _validate_session_params(req: ResponseCreateRequest) -> None:
+        for attr in RESPONSES_SESSION_PARAMS:
+            value = getattr(req, attr, None)
+            if value is not None:
+                raise AdapterError(
+                    message=f"Responses parameter '{attr}' is not supported",
+                    status_code=400,
+                )
+
+    @staticmethod
+    def _validate_tools(req: ResponseCreateRequest) -> None:
+        if not req.tools:
+            return
+        for t in req.tools:
+            tool_type = t.get("type", "function")
+            if tool_type != "function":
+                raise AdapterError(
+                    message=f"Unsupported tool type '{tool_type}': only 'function' tools are supported",
+                    status_code=400,
+                )
 
     @staticmethod
     def _normalize_model(model: str) -> str:
@@ -87,20 +115,13 @@ class ResponsesRequestTranslator:
                         current_system = params.get("system", "")
                         params["system"] = f"{current_system}\n{instruction}" if current_system else instruction
         if req.tools:
-            function_tools = []
-            for t in req.tools:
-                tool_type = t.get("type", "function")
-                if tool_type != "function":
-                    logger.warning("Unsupported built-in tool type skipped: %s", tool_type)
-                    continue
-                function_tools.append(t)
             params["tools"] = [
                 {
                     "name": t.get("name", ""),
                     "description": t.get("description"),
                     "input_schema": normalize_schema(t.get("input_schema", t.get("parameters", {}))),
                 }
-                for t in function_tools
+                for t in req.tools
             ]
         tool_choice = self._translate_tool_choice(req.tool_choice)
         if tool_choice is not None:
@@ -162,6 +183,8 @@ class ResponsesRequestTranslator:
                     content_blocks.append({"type": "text", "text": block.get("text", "")})
                 elif block_type == "input_image":
                     logger.warning("Image input not supported, skipping")
+                elif block_type == "output_text":
+                    content_blocks.append({"type": "text", "text": block.get("text", "")})
                 else:
                     content_blocks.append({"type": "text", "text": str(block)})
         if role == "assistant":

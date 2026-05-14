@@ -342,3 +342,25 @@ async def test_unauthorized_without_key(client):
     async with client as c:
         resp = await c.post("/v1/responses", json=payload)
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_previous_response_id_returns_400(client):
+    _setup()
+    payload = {"model": "deepseek-v4-flash", "input": "hi", "previous_response_id": "resp_prev"}
+    async with client as c:
+        resp = await c.post("/v1/responses", json=payload)
+    assert resp.status_code == 400
+    data = resp.json()
+    assert "previous_response_id" in data["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_built_in_tool_returns_400(client):
+    _setup()
+    payload = {"model": "deepseek-v4-flash", "input": "search", "tools": [{"type": "web_search_preview"}]}
+    async with client as c:
+        resp = await c.post("/v1/responses", json=payload)
+    assert resp.status_code == 400
+    data = resp.json()
+    assert "web_search_preview" in data["error"]["message"]
