@@ -131,17 +131,24 @@ async def translate_responses_stream(
         "id": response_id, "object": "response", "status": "in_progress",
         "created_at": created, "model": model, "output": [], "usage": None,
     }
-    yield _sse({"type": "response.created", "response": partial, "sequence_number": 0})
-    yield _sse({"type": "response.in_progress", "response": partial, "sequence_number": 1})
+    bootstrap_done = False
 
-    try:
-        async for event in cc_stream:
+    def _emit_bootstrap():
+        nonlocal bootstrap_done
+        if not bootstrap_done:
+            bootstrap_done = True
+            yield _sse({"type": "response.created", "response": partial, "sequence_number": 0})
+            yield _sse({"type": "response.in_progress", "response": partial, "sequence_number": 1})
+
+    async for event in cc_stream:
             event_type = event.get("type")
 
             if event_type == "reasoning-delta":
                 text = event.get("text") or ""
                 if not text:
                     continue
+                for chunk in _emit_bootstrap():
+                    yield chunk
                 has_any_output = True
                 if current_item_type_val != "reasoning":
                     if current_item_type_val is not None:
@@ -175,6 +182,8 @@ async def translate_responses_stream(
                 text = event.get("text") or ""
                 if not text:
                     continue
+                for chunk in _emit_bootstrap():
+                    yield chunk
                 has_any_output = True
                 if current_item_type_val != "text":
                     if current_item_type_val is not None:
@@ -208,6 +217,8 @@ async def translate_responses_stream(
                 seq += 1
 
             elif event_type == "tool-call":
+                for chunk in _emit_bootstrap():
+                    yield chunk
                 has_any_output = True
                 tool_name = event.get("toolName", "")
                 tool_call_id = event.get("toolCallId", f"call_{uuid.uuid4().hex[:8]}")
@@ -316,13 +327,6 @@ async def translate_responses_stream(
                     "sequence_number": seq,
                 })
                 return
-
-    except AdapterError as e:
-        logger.warning("upstream.error", error=e.message)
-        yield _sse({
-            "type": "error", "code": str(e.status_code), "message": e.message,
-            "sequence_number": seq,
-        })
 
     if has_any_output:
         yield _sse({
