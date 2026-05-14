@@ -83,6 +83,7 @@ class ResponseCreateRequest(BaseModel):
     reasoning: dict[str, Any] | None = None
     previous_response_id: str | None = None
     stream: bool = False
+    prompt_cache_retention: str | None = None
     store: bool | None = None
     metadata: dict[str, Any] | None = None
     user: str | None = None
@@ -94,7 +95,6 @@ class ResponseCreateRequest(BaseModel):
     include: list[str] | None = None
     safety_identifier: str | None = None
     prompt_cache_key: str | None = None
-    prompt_cache_retention: str | None = None
     background: bool | None = None
     text: dict[str, Any] | None = None
     top_logprobs: int | None = None

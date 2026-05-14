@@ -16,6 +16,7 @@ from cc_adapter.core.auth import set_password
 from cc_adapter.core.runtime import init as runtime_init, get_client as get_runtime_client, get_config
 from cc_adapter.providers.openai.router import router as openai_router
 from cc_adapter.providers.anthropic.router import router as anthropic_router
+from cc_adapter.providers.openai.responses_router import router as responses_router
 from cc_adapter.admin import router as admin_router
 from cc_adapter.catalog.models_data import MODELS_DATA
 
@@ -58,6 +59,7 @@ runtime_init(
 )
 app.include_router(openai_router)
 app.include_router(anthropic_router)
+app.include_router(responses_router)
 app.include_router(admin_router.router)
 
 admin_static = StaticFiles(directory=Path(__file__).parent / "admin" / "static", html=True)
