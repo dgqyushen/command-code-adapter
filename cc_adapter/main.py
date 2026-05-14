@@ -88,7 +88,7 @@ async def health():
     return {
         "status": "ok",
         "version": checker.get_version(),
-        "last_fetch": checker.last_fetch_time,
+        "last_fetch": checker.last_fetch_time or 0,
     }
 
 

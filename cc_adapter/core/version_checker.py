@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
-from typing import Any
 
 import httpx
 import structlog
@@ -10,8 +10,9 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 NPM_URL = "https://registry.npmjs.org/command-code/latest"
-DEFAULT_VERSION = "0.25.2"
+DEFAULT_VERSION = os.environ.get("CC_ADAPTER_DEFAULT_VERSION", "0.25.2")
 CACHE_TTL = 1800  # 30 minutes
+ERROR_BACKOFF = 60  # 1 minute backoff after failure
 
 
 class VersionChecker:
@@ -19,7 +20,7 @@ class VersionChecker:
         self._cached_version: str = DEFAULT_VERSION
         self._last_fetch_time: float | None = None
         self._last_error: str | None = None
-        self._fetch_task: asyncio.Task[Any] | None = None
+        self._fetch_task: asyncio.Task[None] | None = None
 
     def get_version(self) -> str:
         if self._is_stale():
@@ -45,9 +46,11 @@ class VersionChecker:
     def _is_stale(self) -> bool:
         if self._last_fetch_time is None:
             return True
-        return time.monotonic() - self._last_fetch_time > CACHE_TTL
+        ttl = ERROR_BACKOFF if self._last_error else CACHE_TTL
+        return time.monotonic() - self._last_fetch_time > ttl
 
     async def _fetch_and_update(self) -> None:
+        self._last_error = None
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(NPM_URL)
@@ -60,7 +63,7 @@ class VersionChecker:
                 else:
                     logger.warning("version.missing_field", url=NPM_URL)
                 self._last_fetch_time = time.monotonic()
-                self._last_error = None
         except Exception as e:
             self._last_error = str(e)
+            self._last_fetch_time = time.monotonic()
             logger.warning("version.fetch_failed", error=str(e), url=NPM_URL)
