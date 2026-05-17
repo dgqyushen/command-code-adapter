@@ -1,5 +1,5 @@
 import pytest
-from cc_adapter.core.utils import normalize_api_keys, is_deepseek_v4_model
+from cc_adapter.core.utils import normalize_api_keys
 
 
 class TestNormalizeApiKeys:
@@ -23,14 +23,3 @@ class TestNormalizeApiKeys:
 
     def test_invalid_json_falls_back_to_single(self):
         assert normalize_api_keys("{bad") == ["{bad"]
-
-
-class TestIsDeepseekV4Model:
-    def test_bare_name(self):
-        assert is_deepseek_v4_model("deepseek-v4-flash") is True
-
-    def test_qualified_name(self):
-        assert is_deepseek_v4_model("deepseek/deepseek-v4-flash") is True
-
-    def test_other_model(self):
-        assert is_deepseek_v4_model("claude-sonnet-4-6") is False

@@ -20,6 +20,4 @@ def normalize_api_keys(value: str | list[str] | None) -> list[str]:
     return []
 
 
-def is_deepseek_v4_model(model: str) -> bool:
-    bare = model.split("/")[-1]
-    return bare.startswith("deepseek-v4")
+

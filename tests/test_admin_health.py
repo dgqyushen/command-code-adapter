@@ -80,5 +80,5 @@ async def test_reasoning_effort_config():
         resp = await client.get("/admin/api/reasoning-effort", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     data = resp.json()
-    assert "max_prompt" in data
-    assert "deepseek_v4_models" in data
+    assert "model_reasoning_efforts" in data
+    assert "deepseek/deepseek-v4-flash" in data["model_reasoning_efforts"]

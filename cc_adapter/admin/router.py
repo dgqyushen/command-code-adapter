@@ -13,11 +13,11 @@ from cc_adapter.core.auth import generate_token, validate_token
 from cc_adapter.core.runtime import get_config, get_client, init as state_init
 from cc_adapter.core.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.command_code.client import CommandCodeClient
-from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX
+from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP, MODEL_REASONING_EFFORTS_MAP
 from cc_adapter.command_code.body import make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens, query_daily_usage
 from cc_adapter.command_code.headers import make_cc_headers
-from cc_adapter.core.utils import normalize_api_keys, is_deepseek_v4_model
+from cc_adapter.core.utils import normalize_api_keys
 
 router = APIRouter(prefix="/admin/api")
 logger = structlog.get_logger(__name__)
@@ -149,12 +149,10 @@ async def list_models():
 @router.get("/reasoning-effort")
 async def get_reasoning_effort_config(_=Depends(verify_auth)):
     return {
-        "max_prompt": REASONING_EFFORT_MAX,
-        "deepseek_v4_models": [k for k in MODEL_PROVIDER_MAP if k.startswith("deepseek-v4")],
+        "model_reasoning_efforts": MODEL_REASONING_EFFORTS_MAP,
         "description": (
-            "For deepseek-v4 series models, when reasoning_effort is 'xhigh' or 'max', "
-            "the REASONING_EFFORT_MAX prompt is prepended to the system prompt. "
-            "'xhigh' is mapped to 'max'."
+            "Per-model supported reasoning_effort levels. "
+            "Values not in the list are clamped to the nearest higher level."
         ),
     }
 
