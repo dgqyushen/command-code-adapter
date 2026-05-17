@@ -357,3 +357,23 @@ body {
 .chat-input-area textarea:focus { outline: none; border-color: var(--accent); }
 .chat-input-area button { align-self: flex-end; padding: 10px 24px; }
 .chat-empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 14px; }
+
+/* Usage Analytics */
+.usage-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.usage-header h2 { font-size: 18px; }
+.usage-range-selector { display: flex; gap: 6px; flex-wrap: wrap; }
+.usage-range-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer; }
+.usage-range-btn:hover { background: var(--bg-secondary); }
+.usage-range-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.usage-range-btn input[type="date"] { border: none; background: transparent; color: inherit; font-size: 13px; padding: 0; margin: 0; outline: none; }
+.usage-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.usage-summary-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+.usage-summary-card .value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.usage-summary-card .label { font-size: 12px; color: var(--text-muted); }
+.usage-chart-container { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.usage-chart-container canvas { max-height: 300px; }
+.usage-daily-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.usage-daily-table th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-weight: 600; }
+.usage-daily-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.usage-daily-table tr:hover td { background: var(--bg-secondary); }
+.usage-model-badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--bg-tertiary); margin: 1px 2px; }

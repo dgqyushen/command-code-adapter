@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import structlog
 import time
+from datetime import date as date_type
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Header
@@ -14,7 +15,7 @@ from cc_adapter.core.config import AppConfig, DEFAULT_MODEL
 from cc_adapter.command_code.client import CommandCodeClient
 from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP, REASONING_EFFORT_MAX
 from cc_adapter.command_code.body import make_cc_body, _make_config
-from cc_adapter.admin.usage_client import query_all_tokens
+from cc_adapter.admin.usage_client import query_all_tokens, query_daily_usage
 from cc_adapter.command_code.headers import make_cc_headers
 from cc_adapter.core.utils import normalize_api_keys, is_deepseek_v4_model
 
@@ -225,6 +226,49 @@ async def admin_usage_query(_=Depends(verify_auth)):
         return []
     results = await query_all_tokens(cfg.cc_base_url, cfg.cc_api_key)
     return results
+
+
+class DailyUsageRequest(BaseModel):
+    start_date: str
+    end_date: str
+
+
+@router.post("/usage/daily")
+async def admin_daily_usage(req: DailyUsageRequest, _=Depends(verify_auth)):
+    cfg = get_config()
+    if not cfg or not cfg.cc_api_key:
+        return {"daily": [], "totals": {"total_cost": 0, "total_count": 0, "models": []}}
+    primary_key = normalize_api_keys(cfg.cc_api_key)
+    if not primary_key:
+        return {"daily": [], "totals": {"total_cost": 0, "total_count": 0, "models": []}}
+    start = date_type.fromisoformat(req.start_date)
+    end = date_type.fromisoformat(req.end_date)
+    daily = await query_daily_usage(cfg.cc_base_url, primary_key[0], start, end)
+
+    total_cost = sum(d["total_cost"] for d in daily)
+    total_count = sum(d["total_count"] for d in daily)
+
+    model_agg: dict[str, dict[str, object]] = {}
+    for d in daily:
+        for m in d.get("models", []):
+            mid = m["model_id"]
+            if mid not in model_agg:
+                model_agg[mid] = {"model_id": mid, "cost": 0.0, "count": 0}
+            model_agg[mid]["cost"] += m["cost"]
+            model_agg[mid]["count"] += m["count"]
+
+    models_list = sorted(model_agg.values(), key=lambda x: x["cost"], reverse=True)
+    for m in models_list:
+        m["pct"] = round((m["cost"] / total_cost * 100), 1) if total_cost > 0 else 0
+
+    return {
+        "daily": daily,
+        "totals": {
+            "total_cost": round(total_cost, 4),
+            "total_count": total_count,
+            "models": models_list,
+        },
+    }
 
 
 @router.get("/health")

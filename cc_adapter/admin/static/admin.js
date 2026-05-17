@@ -61,6 +61,23 @@ const i18n = {
     tokenSave: "保存",
     tokenCancel: "取消",
     reasoningEffortMax: "启用 Max Prompt（仅 deepseek-v4）",
+    usage: "使用统计",
+    usageRange1d: "近1天",
+    usageRange7d: "近7天",
+    usageRange30d: "近30天",
+    usageStart: "开始",
+    usageEnd: "结束",
+    usageTotalCost: "总费用",
+    usageTotalRequests: "总请求数",
+    usageTotalModels: "模型数",
+    usageDailyTrend: "每日费用趋势",
+    usageByModel: "按模型分布",
+    usageDate: "日期",
+    usageCost: "费用",
+    usageRequests: "请求数",
+    usageModels: "模型",
+    usageLoading: "加载中...",
+    usageNoData: "暂无使用数据",
   },
   en: {
     title: "CC Adapter Admin",
@@ -123,6 +140,23 @@ const i18n = {
     tokenSave: "Save",
     tokenCancel: "Cancel",
     reasoningEffortMax: "Enable Max Prompt (deepseek-v4 only)",
+    usage: "Usage",
+    usageRange1d: "1 Day",
+    usageRange7d: "7 Days",
+    usageRange30d: "30 Days",
+    usageStart: "Start",
+    usageEnd: "End",
+    usageTotalCost: "Total Cost",
+    usageTotalRequests: "Total Requests",
+    usageTotalModels: "Models",
+    usageDailyTrend: "Daily Cost Trend",
+    usageByModel: "By Model",
+    usageDate: "Date",
+    usageCost: "Cost",
+    usageRequests: "Requests",
+    usageModels: "Models",
+    usageLoading: "Loading...",
+    usageNoData: "No usage data",
   },
 };
 
@@ -134,6 +168,17 @@ let pgMessages = [];
 let pgStreaming = false;
 
 function t(key) { return i18n[lang][key] || key; }
+
+function fmtUptime(s) {
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  const w = Math.floor(d / 7);
+  if (w > 0) return `${w}周${d % 7}天`;
+  if (d > 0) return `${d}天${h % 24}小时`;
+  if (h > 0) return h > 0 && m % 60 > 0 ? `${h}小时${m % 60}分钟` : `${h}小时`;
+  return `${m}分钟`;
+}
 
 function applyLang() {
   document.documentElement.lang = lang;
@@ -220,6 +265,7 @@ async function doLogin() {
 
 // Navigation
 function switchTab(name) {
+  destroyUsageCharts();
   document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
   document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add("active");
   document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
@@ -239,6 +285,7 @@ function renderTab(name) {
   if (name === "dashboard") renderDashboard();
   else if (name === "config") renderConfig();
   else if (name === "playground") renderPlayground();
+  else if (name === "usage") renderUsage();
 }
 
 // Dashboard
@@ -270,7 +317,7 @@ async function loadDashboard() {
     const data = await resp.json();
     document.getElementById("health-dot").className = "status-dot ok";
     document.getElementById("health-text").textContent =
-      `${t("running")} | uptime ${Math.floor(data.uptime / 60)}m`;
+      `${t("running")} | ${fmtUptime(data.uptime)}`;
     document.getElementById("key-dot").className =
       data.cc_api_key_configured ? "status-dot ok" : "status-dot err";
     document.getElementById("key-text").textContent =
@@ -313,12 +360,12 @@ function renderUsageSection() {
       <div class="token-empty">Loading...</div>
     </div>`;
   container.appendChild(section);
-  document.getElementById("usage-refresh-btn").onclick = loadUsageData;
+  document.getElementById("usage-refresh-btn").onclick = loadTokenUsageData;
   document.getElementById("usage-manage-btn").onclick = showTokenManager;
-  loadUsageData();
+  loadTokenUsageData();
 }
 
-async function loadUsageData() {
+async function loadTokenUsageData() {
   const container = document.getElementById("usage-cards-container");
   if (!container) return;
   container.innerHTML = '<div class="token-empty">Loading...</div>';
@@ -354,9 +401,6 @@ function renderTokenCard(item) {
     if (pct >= 90) barClass += " danger";
     else if (pct >= 75) barClass += " warning";
     const periodStr = sub.period_start ? `${sub.period_start.slice(0, 10)} ~ ${sub.period_end.slice(0, 10)}` : "";
-    const modelsHtml = usage.models && usage.models.length > 0
-      ? usage.models.map(m => `${m.model_id.split("/").pop()} $${m.total_cost} (${m.total_count})`).join(" · ")
-      : "";
     card.innerHTML = `
       <div class="token-card-header">
         <div>
@@ -381,7 +425,7 @@ function renderTokenCard(item) {
           <div class="${barClass}" style="width:${pct}%"></div>
         </div>
       </div>
-      ${modelsHtml ? `<div class="token-models">${t("tokenModels")}: ${modelsHtml}</div>` : ""}`;
+      `;
   } else {
     const errMsg = item.error || "Unknown error";
     card.innerHTML = `
@@ -458,7 +502,7 @@ function showTokenManager() {
       if (!resp.ok) throw new Error(await resp.text());
       showToast(t("saved"), "success");
       overlay.remove();
-      loadUsageData();
+      loadTokenUsageData();
     } catch { showToast(t("saveFailed"), "error"); }
   };
 }
@@ -773,6 +817,160 @@ async function sendChatMessage() {
     pgStreaming = false;
     sendBtn.disabled = false;
     sendBtn.textContent = t("send");
+  }
+}
+
+let usageCharts = {};
+
+function destroyUsageCharts() {
+  Object.values(usageCharts).forEach(c => { if (c) c.destroy(); });
+  usageCharts = {};
+}
+
+async function renderUsage() {
+  const el = document.getElementById("tab-usage");
+  destroyUsageCharts();
+
+  const today = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+
+  el.innerHTML = `
+    <div class="usage-header">
+      <h2>${t("usage")}</h2>
+    </div>
+    <div class="usage-range-selector" style="margin-bottom:16px">
+      <button class="usage-range-btn" data-range="1">${t("usageRange1d")}</button>
+      <button class="usage-range-btn active" data-range="7">${t("usageRange7d")}</button>
+      <button class="usage-range-btn" data-range="30">${t("usageRange30d")}</button>
+      <input type="date" id="usage-start" value="${sevenDaysAgo}" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;">
+      <span style="color:var(--text-muted)">~</span>
+      <input type="date" id="usage-end" value="${today}" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;">
+    </div>
+    <div id="usage-content">
+      <div style="text-align:center;padding:48px;color:var(--text-muted)">${t("usageLoading")}</div>
+    </div>`;
+
+  document.querySelectorAll(".usage-range-btn").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".usage-range-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const days = parseInt(btn.dataset.range);
+      const end = new Date();
+      const start = new Date(end.getTime() - (days - 1) * 86400000);
+      document.getElementById("usage-start").value = start.toISOString().slice(0, 10);
+      document.getElementById("usage-end").value = end.toISOString().slice(0, 10);
+      loadUsageAnalyticsData();
+    };
+  });
+
+  document.getElementById("usage-start").onchange = loadUsageAnalyticsData;
+  document.getElementById("usage-end").onchange = loadUsageAnalyticsData;
+
+  loadUsageAnalyticsData();
+}
+
+async function loadUsageAnalyticsData() {
+  const container = document.getElementById("usage-content");
+  if (!container) return;
+  container.innerHTML = `<div style="text-align:center;padding:48px;color:var(--text-muted)">${t("usageLoading")}</div>`;
+
+  const startDate = document.getElementById("usage-start").value;
+  const endDate = document.getElementById("usage-end").value;
+
+  try {
+    const resp = await api("POST", "/admin/api/usage/daily", { start_date: startDate, end_date: endDate });
+    const data = await resp.json();
+
+    if (!data.daily || data.daily.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:48px;color:var(--text-muted)">${t("usageNoData")}</div>`;
+      return;
+    }
+
+    const totals = data.totals;
+    const activeModels = totals.models.filter(m => m.cost > 0);
+    container.innerHTML = `
+      <div class="usage-summary-grid">
+        <div class="usage-summary-card">
+          <div class="value">$${totals.total_cost.toFixed(2)}</div>
+          <div class="label">${t("usageTotalCost")}</div>
+        </div>
+        <div class="usage-summary-card">
+          <div class="value">${totals.total_count.toLocaleString()}</div>
+          <div class="label">${t("usageTotalRequests")}</div>
+        </div>
+        <div class="usage-summary-card">
+          <div class="value">${activeModels.length}</div>
+          <div class="label">${t("usageTotalModels")}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div class="usage-chart-container">
+          <canvas id="chart-daily-trend"></canvas>
+        </div>
+        <div class="usage-chart-container">
+          <canvas id="chart-by-model"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <table class="usage-daily-table">
+          <thead><tr>
+            <th>${t("usageDate")}</th>
+            <th>${t("usageCost")}</th>
+            <th>${t("usageRequests")}</th>
+            <th>${t("usageModels")}</th>
+          </tr></thead>
+          <tbody>${[...data.daily].reverse().map(d => {
+            const modelsHtml = (d.models || []).map(m => `<span class="usage-model-badge">${m.model_id.split("/").pop()} $${m.cost.toFixed(2)}</span>`).join("");
+            return `<tr><td>${d.date.slice(5)}</td><td>$${d.total_cost.toFixed(2)}</td><td>${d.total_count}</td><td>${modelsHtml || "-"}</td></tr>`;
+          }).join("")}</tbody>
+        </table>
+      </div>`;
+
+    const ctx1 = document.getElementById("chart-daily-trend").getContext("2d");
+    usageCharts.dailyTrend = new Chart(ctx1, {
+      type: "line",
+      data: {
+        labels: data.daily.map(d => d.date.slice(5)),
+        datasets: [{
+          label: t("usageCost"),
+          data: data.daily.map(d => d.total_cost),
+          borderColor: "#3b82f6",
+          backgroundColor: "rgba(59, 130, 246, 0.1)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false }, title: { display: true, text: t("usageDailyTrend"), color: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() } },
+        scales: { x: { ticks: { color: getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() } }, y: { ticks: { color: getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() } } },
+      },
+    });
+
+    const ctx2 = document.getElementById("chart-by-model").getContext("2d");
+    const modelColors = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
+    usageCharts.byModel = new Chart(ctx2, {
+      type: "bar",
+      data: {
+        labels: activeModels.map(m => m.model_id.split("/").pop()),
+        datasets: [{
+          label: t("usageCost"),
+          data: activeModels.map(m => m.cost),
+          backgroundColor: activeModels.map((_, i) => modelColors[i % modelColors.length]),
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        indexAxis: "y",
+        plugins: { legend: { display: false }, title: { display: true, text: t("usageByModel"), color: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() } },
+        scales: { x: { ticks: { color: getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() } }, y: { ticks: { color: getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() } } },
+      },
+    });
+  } catch (e) {
+    container.innerHTML = `<div style="text-align:center;padding:48px;color:var(--error)">Error: ${escapeHtml(e.message)}</div>`;
   }
 }
 
