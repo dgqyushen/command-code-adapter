@@ -10,12 +10,10 @@ from cc_adapter.providers.openai.models import ChatCompletionRequest
 from cc_adapter.providers.shared.tool_mapping import normalize_input_args, normalize_schema
 from cc_adapter.providers.shared.model_mapping import (
     MODEL_PROVIDER_MAP,
-    REASONING_EFFORT_MAX,
-    REASONING_EFFORT_MAP,
+    clamp_reasoning_effort,
     NOT_SUPPORTED_PARAMS,
 )
 from cc_adapter.command_code.body import make_cc_body, _make_config
-from cc_adapter.core.utils import is_deepseek_v4_model
 from cc_adapter.command_code.headers import make_cc_headers
 
 logger = logging.getLogger(__name__)
@@ -125,21 +123,10 @@ class RequestTranslator:
         if req.temperature is not None:
             params["temperature"] = req.temperature
         if req.reasoning_effort is not None:
-            effort = req.reasoning_effort
-            if is_deepseek_v4_model(req.model) and effort in ("xhigh", "max"):
-                params["reasoning_effort"] = "max"
-                if system_prompt:
-                    params["system"] = f"{REASONING_EFFORT_MAX}{system_prompt}"
-                else:
-                    params["system"] = REASONING_EFFORT_MAX
-            else:
+            model_id = self._normalize_model(req.model)
+            effort = clamp_reasoning_effort(model_id, req.reasoning_effort)
+            if effort:
                 params["reasoning_effort"] = effort
-                instruction = REASONING_EFFORT_MAP.get(effort, "")
-                if instruction:
-                    if system_prompt:
-                        params["system"] = f"{system_prompt}\n{instruction}"
-                    else:
-                        params["system"] = instruction
         if req.tools:
             params["tools"] = [
                 {
