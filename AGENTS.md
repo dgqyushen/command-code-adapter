@@ -62,7 +62,7 @@ POST /v1/messages                     POST /v1/chat/completions
 - **System prompt** extracted from messages, passed as top-level `system` field.
 - **`tool` role messages** kept as `tool` role with `tool-call`/`tool-result` content blocks.
 - **Tool param mapping**: `filePath`/`oldString`/`newString` ↔ `path`/`old_str`/`new_str` in `providers/shared/tool_mapping.py`.
-- **`reasoning_effort`**: deepseek-v4 models map `xhigh`/`max` → `max` with special verbose prompt (`REASONING_EFFORT_MAX`). Other models get simple instruction injection.
+- **`reasoning_effort`**: clamped per model via `MODEL_REASONING_EFFORTS_MAP` — unsupported values mapped to nearest higher. Models not in the map drop it. No prompt injection.
 
 ## Translation quirks — Anthropic
 

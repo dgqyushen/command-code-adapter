@@ -122,6 +122,8 @@ client = OpenAI(
 | claude-sonnet-4-6, claude-opus-4-6/7 | low, medium, high, xhigh, max |
 | gpt-5.5, gpt-5.4, gpt-5.3-codex | low, medium, high, xhigh |
 | gpt-5.4-mini, claude-haiku-4-5 | low, medium, high |
+| Qwen/Qwen3.6-Max-Preview, Qwen/Qwen3.6-Plus | low, medium, high |
+| stepfun/Step-3.5-Flash | low, medium, high |
 
 实现：仅透传 `reasoning_effort` 参数给 CC API，不注入任何 system prompt。响应端保留 `reasoning-delta` 的过滤逻辑（`"off"` 模式下剥离 `reasoning_content`）。
 
@@ -278,18 +280,26 @@ The adapter supports the `reasoning_effort` parameter to control the model's rea
 
 | Value | Description |
 |---|---|
-| `"off"` | Suppress reasoning output (system prompt + response-side `reasoning-delta` filtering) |
+| `"off"` | Suppress reasoning output (response-side `reasoning-delta` filtering) |
 | `"low"` | Minimal reasoning |
-| `"medium"` | Default reasoning (no system prompt injection) |
-| `"high"` | Step-by-step reasoning |
-| `"xhigh"` | Detailed reasoning |
+| `"medium"` | Moderate reasoning |
+| `"high"` | High reasoning |
+| `"xhigh"` | Extra high reasoning |
 | `"max"` | Maximum reasoning |
-| `null` / not set | Current behavior, no intervention |
+| `null` / not set | No reasoning effort set |
 
-The implementation uses a **dual-path strategy**:
-1. **CC API passthrough**: forwards `reasoning_effort` to CC API for future native support
-2. **System prompt injection**: appends reasoning instructions based on the level (except `"medium"`)
-3. **Response filtering**: strips `reasoning-delta` events and `reasoning_content` when set to `"off"`
+Supported values vary per model. The adapter uses `MODEL_REASONING_EFFORTS_MAP` (sourced from CC v0.26.7 client data). When a value exceeds a model's supported range, it is clamped to the nearest higher supported value. Models not in the map get no `reasoning_effort` param.
+
+| Model | Supported Values |
+|---|---|
+| deepseek/deepseek-v4-* | high, max |
+| claude-sonnet-4-6, claude-opus-4-6/7 | low, medium, high, xhigh, max |
+| gpt-5.5, gpt-5.4, gpt-5.3-codex | low, medium, high, xhigh |
+| gpt-5.4-mini, claude-haiku-4-5 | low, medium, high |
+| Qwen/Qwen3.6-Max-Preview, Qwen/Qwen3.6-Plus | low, medium, high |
+| stepfun/Step-3.5-Flash | low, medium, high |
+
+Implementation: forwards `reasoning_effort` to CC API as-is, with **no system prompt injection**.
 
 ```bash
 curl http://localhost:8080/v1/chat/completions \

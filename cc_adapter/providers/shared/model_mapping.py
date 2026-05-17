@@ -31,6 +31,10 @@ MODEL_REASONING_EFFORTS_MAP: dict[str, list[str]] = {
     "gpt-5.4": ["low", "medium", "high", "xhigh"],
     "gpt-5.3-codex": ["low", "medium", "high", "xhigh"],
     "gpt-5.4-mini": ["low", "medium", "high"],
+    "claude-haiku-4-5-20251001": ["low", "medium", "high"],
+    "Qwen/Qwen3.6-Max-Preview": ["low", "medium", "high"],
+    "Qwen/Qwen3.6-Plus": ["low", "medium", "high"],
+    "stepfun/Step-3.5-Flash": ["low", "medium", "high"],
 }
 
 NOT_SUPPORTED_PARAMS = {

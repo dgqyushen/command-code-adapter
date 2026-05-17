@@ -22,7 +22,7 @@ class TestClampReasoningEffort:
         assert clamp_reasoning_effort("deepseek/deepseek-v4-flash", "off") == "off"
 
     def test_model_not_in_map_returns_none(self):
-        assert clamp_reasoning_effort("stepfun/Step-3.5-Flash", "high") is None
+        assert clamp_reasoning_effort("moonshotai/Kimi-K2.6", "high") is None
 
     def test_none_effort_returns_none(self):
         assert clamp_reasoning_effort("deepseek/deepseek-v4-flash", None) is None
