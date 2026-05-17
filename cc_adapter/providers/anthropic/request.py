@@ -5,7 +5,7 @@ from typing import Any
 
 from cc_adapter.providers.anthropic.models import AnthropicRequest
 from cc_adapter.command_code.headers import make_cc_headers
-from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP
+from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP, clamp_reasoning_effort
 from cc_adapter.providers.shared.tool_mapping import normalize_input_args, normalize_schema
 from cc_adapter.command_code.body import _make_config, make_cc_body
 
@@ -82,7 +82,10 @@ class AnthropicTranslator:
             params["tool_choice"] = choice
 
         if req.thinking and req.thinking.type in ("enabled", "adaptive"):
-            params["reasoning_effort"] = _budget_to_effort(req.thinking.budget_tokens)
+            effort = _budget_to_effort(req.thinking.budget_tokens)
+            clamped = clamp_reasoning_effort(self._normalize_model(req.model), effort)
+            if clamped:
+                params["reasoning_effort"] = clamped
 
         if req.temperature is not None:
             params["temperature"] = req.temperature
