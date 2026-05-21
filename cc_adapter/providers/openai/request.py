@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import datetime
 import json
-import logging
+import structlog
 from typing import Any
 
 from cc_adapter.providers.openai.models import ChatCompletionRequest
@@ -16,7 +16,7 @@ from cc_adapter.providers.shared.model_mapping import (
 from cc_adapter.command_code.body import make_cc_body, _make_config
 from cc_adapter.command_code.headers import make_cc_headers
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RequestTranslator:

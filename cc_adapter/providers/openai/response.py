@@ -17,7 +17,7 @@ from cc_adapter.providers.openai.models import (
     Usage,
 )
 from cc_adapter.core.errors import AdapterError, map_upstream_error
-from cc_adapter.core.utils import generate_id
+from cc_adapter.core.utils import generate_id, parse_usage
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
 logger = structlog.get_logger(__name__)
@@ -66,12 +66,13 @@ def _map_finish_reason(cc_reason: str | None) -> str | None:
 
 
 def _parse_usage(raw_usage: dict | None, model: str, start_time: float) -> Usage | None:
-    if not raw_usage:
+    parsed = parse_usage(raw_usage)
+    if parsed is None:
         return None
     usage = Usage(
-        prompt_tokens=raw_usage.get("inputTokens", 0),
-        completion_tokens=raw_usage.get("outputTokens", 0),
-        total_tokens=raw_usage.get("inputTokens", 0) + raw_usage.get("outputTokens", 0),
+        prompt_tokens=parsed["input_tokens"],
+        completion_tokens=parsed["output_tokens"],
+        total_tokens=parsed["total_tokens"],
     )
     elapsed = time.time() - start_time
     logger.info(

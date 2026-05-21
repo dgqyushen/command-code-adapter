@@ -23,3 +23,19 @@ def normalize_api_keys(value: str | list[str] | None) -> list[str]:
             pass
         return [value]
     return []
+
+
+def parse_usage(raw_usage: dict | None) -> dict | None:
+    if not raw_usage:
+        return None
+    input_t = raw_usage.get("inputTokens", 0)
+    output_t = raw_usage.get("outputTokens", 0)
+    result = {
+        "input_tokens": input_t,
+        "output_tokens": output_t,
+        "total_tokens": input_t + output_t,
+    }
+    reasoning_tokens = raw_usage.get("reasoningTokens")
+    if reasoning_tokens:
+        result["output_tokens_details"] = {"reasoning_tokens": reasoning_tokens}
+    return result

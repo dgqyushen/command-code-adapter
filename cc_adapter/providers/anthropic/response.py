@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import time
 from typing import AsyncGenerator
 
@@ -10,7 +10,7 @@ from cc_adapter.core.errors import AdapterError, map_upstream_error
 from cc_adapter.core.utils import generate_id
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _STOP_REASON_MAP = {
     "end_turn": "end_turn",
@@ -113,6 +113,24 @@ async def translate_anthropic_stream(
     has_started = False
     has_content = False
 
+    def _message_start_event() -> str:
+        return _anthropic_sse(
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": response_id,
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [],
+                    "model": model,
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 0, "output_tokens": 0},
+                },
+            },
+        )
+
     async for event in cc_stream:
         event_type = event.get("type")
 
@@ -121,22 +139,7 @@ async def translate_anthropic_stream(
             if not text:
                 continue
             if not has_started:
-                yield _anthropic_sse(
-                    "message_start",
-                    {
-                        "type": "message_start",
-                        "message": {
-                            "id": response_id,
-                            "type": "message",
-                            "role": "assistant",
-                            "content": [],
-                            "model": model,
-                            "stop_reason": None,
-                            "stop_sequence": None,
-                            "usage": {"input_tokens": 0, "output_tokens": 0},
-                        },
-                    },
-                )
+                yield _message_start_event()
                 has_started = True
             if in_text:
                 yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
@@ -167,22 +170,7 @@ async def translate_anthropic_stream(
             if not text:
                 continue
             if not has_started:
-                yield _anthropic_sse(
-                    "message_start",
-                    {
-                        "type": "message_start",
-                        "message": {
-                            "id": response_id,
-                            "type": "message",
-                            "role": "assistant",
-                            "content": [],
-                            "model": model,
-                            "stop_reason": None,
-                            "stop_sequence": None,
-                            "usage": {"input_tokens": 0, "output_tokens": 0},
-                        },
-                    },
-                )
+                yield _message_start_event()
                 has_started = True
             if in_thinking:
                 yield _anthropic_sse("content_block_stop", {"type": "content_block_stop", "index": content_index})
@@ -210,22 +198,7 @@ async def translate_anthropic_stream(
 
         elif event_type == "tool-call":
             if not has_started:
-                yield _anthropic_sse(
-                    "message_start",
-                    {
-                        "type": "message_start",
-                        "message": {
-                            "id": response_id,
-                            "type": "message",
-                            "role": "assistant",
-                            "content": [],
-                            "model": model,
-                            "stop_reason": None,
-                            "stop_sequence": None,
-                            "usage": {"input_tokens": 0, "output_tokens": 0},
-                        },
-                    },
-                )
+                yield _message_start_event()
                 has_started = True
             has_content = True
             if in_thinking:

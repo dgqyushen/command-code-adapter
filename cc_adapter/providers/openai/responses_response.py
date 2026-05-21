@@ -5,29 +5,13 @@ import time
 from typing import AsyncGenerator, Any
 
 from cc_adapter.core.errors import AdapterError, map_upstream_error
-from cc_adapter.core.utils import generate_id
+from cc_adapter.core.utils import generate_id, parse_usage
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
 
 def _sse(event_type: str, data: dict) -> str:
     payload = {"type": event_type, **data}
     return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
-
-
-def _parse_usage(raw_usage: dict | None) -> dict | None:
-    if not raw_usage:
-        return None
-    input_t = raw_usage.get("inputTokens", 0)
-    output_t = raw_usage.get("outputTokens", 0)
-    result = {
-        "input_tokens": input_t,
-        "output_tokens": output_t,
-        "total_tokens": input_t + output_t,
-    }
-    reasoning_tokens = raw_usage.get("reasoningTokens")
-    if reasoning_tokens:
-        result["output_tokens_details"] = {"reasoning_tokens": reasoning_tokens}
-    return result
 
 
 async def translate_responses_stream(
@@ -338,7 +322,7 @@ async def translate_responses_stream(
                 for chunk in close_current_item():
                     yield chunk
 
-            usage = _parse_usage(event.get("totalUsage"))
+            usage = parse_usage(event.get("totalUsage"))
             full_text = "".join(text_buf)
             output_items: list[dict] = []
             if reasoning_buf:
@@ -452,7 +436,7 @@ async def collect_and_translate_responses_nonstream(
             tool_calls.append(tc)
 
         elif event_type == "finish":
-            usage = _parse_usage(event.get("totalUsage"))
+            usage = parse_usage(event.get("totalUsage"))
 
         elif event_type == "error":
             err = event.get("error") or {}

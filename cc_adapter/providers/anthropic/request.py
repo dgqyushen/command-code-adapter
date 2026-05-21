@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from cc_adapter.providers.anthropic.models import AnthropicRequest
@@ -9,7 +9,7 @@ from cc_adapter.providers.shared.model_mapping import resolve_model_id, clamp_re
 from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema
 from cc_adapter.command_code.body import _make_config, make_cc_body
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _NOT_SUPPORTED = {"top_p", "top_k", "stop_sequences"}
 

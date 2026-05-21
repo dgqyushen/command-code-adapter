@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 
 import httpx
 
 from cc_adapter.command_code.headers import make_cc_headers
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 CC_BASE_PATH = "/alpha"
 

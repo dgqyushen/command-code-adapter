@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import AsyncGenerator, Awaitable, Callable, TypeVar
 
 from cc_adapter.core.errors import AdapterError
@@ -11,7 +11,7 @@ T = TypeVar("T")
 async def retry_on_empty(
     generate_fn: Callable[[], AsyncGenerator[dict, None]],
     translate_fn: Callable[[AsyncGenerator[dict, None]], Awaitable[T]],
-    logger: logging.Logger,
+    logger: structlog.stdlib.BoundLogger,
     label: str = "",
 ) -> T:
     for attempt in range(2):
@@ -28,7 +28,7 @@ async def retry_on_empty(
 async def stream_with_retry(
     generate_fn: Callable[[], AsyncGenerator[dict, None]],
     translate_fn: Callable[[AsyncGenerator[dict, None]], AsyncGenerator[str, None]],
-    logger: logging.Logger,
+    logger: structlog.stdlib.BoundLogger,
     label: str = "",
     error_fn: Callable[[str], str] | None = None,
 ) -> AsyncGenerator[str, None]:
