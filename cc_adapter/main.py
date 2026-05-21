@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
         await cc_client.aclose()
 
 
-app = FastAPI(title="Command Code Adapter", version="0.4.5", lifespan=lifespan)
+app = FastAPI(title="Command Code Adapter", version="0.5.0", lifespan=lifespan)
 app.add_middleware(CorrelationIDMiddleware)
 
 cfg = AppConfig()
