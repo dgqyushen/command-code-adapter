@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from cc_adapter.core.config import AppConfig
-from cc_adapter.command_code.client import CommandCodeClient
+
 from cc_adapter.core.logging import configure_logging, CorrelationIDMiddleware
 from cc_adapter.core.errors import AdapterError
 from cc_adapter.core.auth import set_password
@@ -19,6 +19,7 @@ from cc_adapter.core.runtime import (
     get_config,
     get_models_data,
     get_model_fetcher,
+    create_client,
 )
 from cc_adapter.providers.openai.router import router as openai_router
 from cc_adapter.providers.anthropic.router import router as anthropic_router
@@ -53,16 +54,7 @@ app = FastAPI(title="Command Code Adapter", version="0.5.0", lifespan=lifespan)
 app.add_middleware(CorrelationIDMiddleware)
 
 cfg = AppConfig()
-runtime_init(
-    cfg,
-    CommandCodeClient(
-        base_url=cfg.cc_base_url,
-        api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "",
-        max_connections=cfg.http_max_connections,
-        max_keepalive_connections=cfg.http_max_keepalive_connections,
-        http2=cfg.http2,
-    ),
-)
+runtime_init(cfg, create_client(cfg))
 app.include_router(openai_router)
 app.include_router(anthropic_router)
 app.include_router(responses_router)

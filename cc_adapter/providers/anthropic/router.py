@@ -14,7 +14,6 @@ from cc_adapter.providers.anthropic.response import (
 )
 from cc_adapter.core.runtime import get_client, get_config, get_anthropic_translator
 from cc_adapter.core.config import AppConfig
-from cc_adapter.command_code.client import CommandCodeClient
 from cc_adapter.core.errors import AdapterError
 
 logger = structlog.get_logger(__name__)
@@ -23,18 +22,13 @@ router = APIRouter()
 
 
 def _get_client() -> CommandCodeClient:
-    cfg = get_config() or AppConfig()
-    api_key = cfg.cc_api_key[0] if cfg.cc_api_key else ""
     existing = get_client()
     if existing is not None:
         return existing
-    return CommandCodeClient(
-        base_url=cfg.cc_base_url,
-        api_key=api_key,
-        max_connections=cfg.http_max_connections,
-        max_keepalive_connections=cfg.http_max_keepalive_connections,
-        http2=cfg.http2,
-    )
+    from cc_adapter.core.runtime import create_client
+
+    cfg = get_config() or AppConfig()
+    return create_client(cfg)
 
 
 async def _anthropic_stream_with_retry(

@@ -19,7 +19,6 @@ from cc_adapter.core.runtime import (
     init as state_init,
 )
 from cc_adapter.core.config import AppConfig, DEFAULT_MODEL
-from cc_adapter.command_code.client import CommandCodeClient
 from cc_adapter.command_code.body import make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens, query_daily_usage
 from cc_adapter.command_code.headers import make_cc_headers
@@ -196,14 +195,9 @@ async def verify_key(_=Depends(verify_auth)):
         result = {"valid": False, "message": "No API Key configured"}
         logger.info("admin.verify_key", valid=result["valid"])
         return result
-    test_client = CommandCodeClient(
-        base_url=cfg.cc_base_url,
-        api_key=_primary_api_key(cfg.cc_api_key),
-        timeout=10.0,
-        max_connections=cfg.http_max_connections,
-        max_keepalive_connections=cfg.http_max_keepalive_connections,
-        http2=cfg.http2,
-    )
+    from cc_adapter.core.runtime import create_client
+
+    test_client = create_client(cfg, timeout=10.0)
     try:
         test_body = make_cc_body(
             config=_make_config(
@@ -334,15 +328,11 @@ def _update_env_file(update: ConfigUpdate) -> None:
 
 def _recreate_client(cfg: AppConfig) -> CommandCodeClient | None:
     old = get_client()
+    from cc_adapter.core.runtime import create_client
+
     state_init(
         cfg,
-        CommandCodeClient(
-            base_url=cfg.cc_base_url,
-            api_key=_primary_api_key(cfg.cc_api_key),
-            max_connections=cfg.http_max_connections,
-            max_keepalive_connections=cfg.http_max_keepalive_connections,
-            http2=cfg.http2,
-        ),
+        create_client(cfg),
     )
     return old
 

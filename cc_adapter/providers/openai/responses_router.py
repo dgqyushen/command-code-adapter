@@ -85,15 +85,9 @@ async def create_response(req: ResponseCreateRequest, request: Request):
 
         current_client = get_client()
         if current_client is None:
-            from cc_adapter.command_code.client import CommandCodeClient
+            from cc_adapter.core.runtime import create_client
 
-            current_client = CommandCodeClient(
-                base_url=cfg.cc_base_url,
-                api_key=cfg.cc_api_key[0] if cfg.cc_api_key else "",
-                max_connections=cfg.http_max_connections,
-                max_keepalive_connections=cfg.http_max_keepalive_connections,
-                http2=cfg.http2,
-            )
+            current_client = create_client(cfg)
         if not current_client.api_key:
             return JSONResponse(
                 status_code=401,
