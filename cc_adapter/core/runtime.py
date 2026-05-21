@@ -74,3 +74,32 @@ def get_version_checker() -> VersionChecker:
 def reset_version_checker() -> None:
     global _version_checker
     _version_checker = None
+
+
+_model_fetcher: ModelFetcher | None = None
+
+
+def get_model_fetcher() -> ModelFetcher:
+    global _model_fetcher
+    if _model_fetcher is None:
+        from cc_adapter.core.model_fetcher import ModelFetcher
+
+        _model_fetcher = ModelFetcher()
+    return _model_fetcher
+
+
+def reset_model_fetcher() -> None:
+    global _model_fetcher
+    _model_fetcher = None
+
+
+def get_models_data() -> list[dict]:
+    return get_model_fetcher().get_models_data()
+
+
+def get_provider_map() -> dict[str, str]:
+    return get_model_fetcher().get_provider_map()
+
+
+def get_reasoning_efforts() -> dict[str, list[str]]:
+    return get_model_fetcher().get_reasoning_efforts()
