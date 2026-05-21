@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 _NOT_SUPPORTED = {"top_p", "top_k", "stop_sequences"}
 
 
-def _budget_to_effort(budget: int | None) -> str:
+def _budget_to_effort(budget: int | None) -> str | None:
     if budget is None:
-        return "high"
+        return None
     if budget < 4000:
         return "low"
     if budget < 8000:
@@ -79,9 +79,10 @@ class AnthropicTranslator:
 
         if req.thinking and req.thinking.type in ("enabled", "adaptive"):
             effort = _budget_to_effort(req.thinking.budget_tokens)
-            clamped = clamp_reasoning_effort(resolve_model_id(req.model), effort)
-            if clamped:
-                params["reasoning_effort"] = clamped
+            if effort:
+                clamped = clamp_reasoning_effort(resolve_model_id(req.model), effort)
+                if clamped:
+                    params["reasoning_effort"] = clamped
 
         if req.temperature is not None:
             params["temperature"] = req.temperature

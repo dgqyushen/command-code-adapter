@@ -50,7 +50,6 @@ async def translate_responses_stream(
     has_any_output = False
     current_item_type: str | None = None
     current_item_id_val: str | None = None
-    current_item_type_val: str | None = None
 
     def close_current_item():
         nonlocal output_index, seq, current_item_type, current_item_id_val
@@ -122,13 +121,13 @@ async def translate_responses_stream(
             output_index += 1
         elif current_item_type == "fc":
             output_index += 1
-        current_item_type_val = None
+        current_item_type = None
+        current_item_id_val = None
 
     def set_current_item(item_type: str, item_id: str):
-        nonlocal current_item_type, current_item_id_val, current_item_type_val
+        nonlocal current_item_type, current_item_id_val
         current_item_type = item_type
         current_item_id_val = item_id
-        current_item_type_val = item_type
 
     partial = {
         "id": response_id,
@@ -160,8 +159,8 @@ async def translate_responses_stream(
             for chunk in _emit_bootstrap():
                 yield chunk
             has_any_output = True
-            if current_item_type_val != "reasoning":
-                if current_item_type_val is not None:
+            if current_item_type != "reasoning":
+                if current_item_type is not None:
                     for chunk in close_current_item():
                         yield chunk
                 reasoning_item_id = generate_id("rs_")
@@ -206,8 +205,8 @@ async def translate_responses_stream(
             for chunk in _emit_bootstrap():
                 yield chunk
             has_any_output = True
-            if current_item_type_val != "text":
-                if current_item_type_val is not None:
+            if current_item_type != "text":
+                if current_item_type is not None:
                     for chunk in close_current_item():
                         yield chunk
                 text_item_id = generate_id("msg_")
@@ -260,7 +259,7 @@ async def translate_responses_stream(
             raw_args = event.get("input", {})
             args_str = json.dumps(normalize_args(tool_name, raw_args), ensure_ascii=False, separators=(",", ":"))
 
-            if current_item_type_val is not None:
+            if current_item_type is not None:
                 for chunk in close_current_item():
                     yield chunk
 
@@ -330,13 +329,12 @@ async def translate_responses_stream(
             output_index += 1
             current_item_type = None
             current_item_id_val = None
-            current_item_type_val = None
 
         elif event_type == "finish":
             if not has_any_output:
                 raise AdapterError(message="Upstream model returned an empty response", status_code=502)
 
-            if current_item_type_val is not None:
+            if current_item_type is not None:
                 for chunk in close_current_item():
                     yield chunk
 
