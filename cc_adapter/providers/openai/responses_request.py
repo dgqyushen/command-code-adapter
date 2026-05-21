@@ -13,7 +13,7 @@ from cc_adapter.providers.shared.model_mapping import (
     resolve_model_id,
     clamp_reasoning_effort,
 )
-from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema
+from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema, translate_tool_choice
 
 logger = structlog.get_logger(__name__)
 
@@ -136,38 +136,25 @@ class ResponsesRequestTranslator:
     def _translate_tool_choice(
         tool_choice: str | dict[str, Any] | None, req_tools: list[dict[str, Any]] | None
     ) -> dict[str, Any] | None:
-        if tool_choice is None:
+        result = translate_tool_choice(tool_choice)
+        if result is None:
             return None
-        if isinstance(tool_choice, str):
-            if tool_choice == "auto":
-                return {"type": "auto"}
-            elif tool_choice == "none":
-                return {"type": "none"}
-            elif tool_choice == "required":
-                return {"type": "any"}
-        if isinstance(tool_choice, dict):
-            tc_type = tool_choice.get("type", "")
-            if tc_type in ("auto", "none", "any"):
-                return tool_choice
-            if tc_type == "function":
-                name = tool_choice.get("name", "")
-                if name:
-                    if not req_tools:
-                        raise AdapterError(
-                            message=f"tool_choice specifies function '{name}' but no tools are declared",
-                            status_code=400,
-                        )
-                    tool_names = [t.get("name") for t in req_tools]
-                    if name not in tool_names:
-                        raise AdapterError(
-                            message=f"tool_choice function '{name}' does not match any declared tool",
-                            status_code=400,
-                        )
-                    return {"type": "tool", "name": name}
-        raise AdapterError(
-            message=f"Unsupported tool_choice value: {tool_choice}",
-            status_code=400,
-        )
+        name = result.get("name", "")
+        if name:
+            if not req_tools:
+                raise AdapterError(
+                    message=f"tool_choice specifies function '{name}' but no tools are declared",
+                    status_code=400,
+                )
+            tool_names = [t.get("name") for t in req_tools]
+            if name not in tool_names:
+                raise AdapterError(
+                    message=f"tool_choice function '{name}' does not match any declared tool",
+                    status_code=400,
+                )
+        if result.get("type") == "auto" and not req_tools:
+            pass
+        return result
 
     def _build_messages(self, input_data: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
         if isinstance(input_data, str):

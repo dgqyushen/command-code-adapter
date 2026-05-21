@@ -18,7 +18,7 @@ def create_client(cfg: AppConfig, *, timeout: float | None = None) -> CommandCod
         max_connections=cfg.http_max_connections,
         max_keepalive_connections=cfg.http_max_keepalive_connections,
         http2=cfg.http2,
-        timeout=timeout or 60.0,
+        timeout=timeout if timeout is not None else 60.0,
     )
 
 
@@ -33,6 +33,14 @@ def get_config() -> AppConfig | None:
 
 
 def get_client() -> CommandCodeClient | None:
+    return _cc_client
+
+
+def get_or_create_client() -> CommandCodeClient:
+    global _cc_client
+    if _cc_client is None:
+        from cc_adapter.core.config import AppConfig
+        _cc_client = create_client(get_config() or AppConfig())
     return _cc_client
 
 

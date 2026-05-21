@@ -11,7 +11,8 @@ from cc_adapter.core.config import AppConfig
 from cc_adapter.core.errors import AdapterError, AuthenticationError
 from cc_adapter.core.auth import check_api_access
 from cc_adapter.core.retry import retry_on_empty
-from cc_adapter.core.runtime import get_config, get_client, get_request_translator
+from cc_adapter.core.runtime import get_config, get_request_translator, get_or_create_client
+from cc_adapter.core.constants import STREAMING_HEADERS
 from cc_adapter.providers.openai.models import ChatCompletionRequest
 from cc_adapter.providers.openai.response import translate_stream, collect_and_translate_nonstream
 
@@ -170,11 +171,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 
     start_time = time.time()
 
-    current_client = get_client()
-    if current_client is None:
-        from cc_adapter.core.runtime import create_client
-
-        current_client = create_client(cfg)
+    current_client = get_or_create_client()
     if not current_client.api_key:
         raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
 
@@ -188,11 +185,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
                 tools_available,
             ),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+            headers=STREAMING_HEADERS,
         )
     else:
         return await retry_on_empty(

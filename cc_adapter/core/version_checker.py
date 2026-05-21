@@ -9,10 +9,9 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-NPM_URL = "https://registry.npmjs.org/command-code/latest"
+from cc_adapter.core.constants import NPM_URL, NPM_CACHE_TTL, NPM_ERROR_BACKOFF
+
 DEFAULT_VERSION = os.environ.get("CC_ADAPTER_DEFAULT_VERSION", "0.25.2")
-CACHE_TTL = 1800  # 30 minutes
-ERROR_BACKOFF = 60  # 1 minute backoff after failure
 
 
 class VersionChecker:
@@ -46,7 +45,7 @@ class VersionChecker:
     def _is_stale(self) -> bool:
         if self._last_fetch_time is None:
             return True
-        ttl = ERROR_BACKOFF if self._last_error else CACHE_TTL
+        ttl = NPM_ERROR_BACKOFF if self._last_error else NPM_CACHE_TTL
         return time.monotonic() - self._last_fetch_time > ttl
 
     async def _fetch_and_update(self) -> None:

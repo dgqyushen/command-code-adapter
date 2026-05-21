@@ -28,9 +28,7 @@ MODEL_PREFIXES = (
     "baseten:",
 )
 
-NPM_URL = "https://registry.npmjs.org/command-code/latest"
-CACHE_TTL = 1800
-ERROR_BACKOFF = 60
+from cc_adapter.core.constants import NPM_URL, NPM_CACHE_TTL, NPM_ERROR_BACKOFF
 DEFAULT_CACHE_FILE = "models_cache.json"
 
 
@@ -89,7 +87,7 @@ class ModelFetcher:
     def _is_stale(self) -> bool:
         if self._fetched_at is None:
             return True
-        ttl = ERROR_BACKOFF if self._last_error else CACHE_TTL
+        ttl = NPM_ERROR_BACKOFF if self._last_error else NPM_CACHE_TTL
         return time.time() - self._fetched_at > ttl
 
     def _load_cache(self) -> bool:

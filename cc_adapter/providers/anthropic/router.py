@@ -12,10 +12,12 @@ from cc_adapter.providers.anthropic.response import (
     translate_anthropic_stream,
     collect_and_translate_anthropic_nonstream,
 )
+from cc_adapter.command_code.client import CommandCodeClient
 from cc_adapter.core.auth import check_api_access
-from cc_adapter.core.retry import retry_on_empty
-from cc_adapter.core.runtime import get_client, get_config, get_anthropic_translator
+from cc_adapter.core.retry import retry_on_empty, stream_with_retry
+from cc_adapter.core.runtime import get_config, get_anthropic_translator
 from cc_adapter.core.config import AppConfig
+from cc_adapter.core.constants import STREAMING_HEADERS
 from cc_adapter.core.errors import AdapterError
 
 logger = structlog.get_logger(__name__)
@@ -24,36 +26,9 @@ router = APIRouter()
 
 
 def _get_client() -> CommandCodeClient:
-    existing = get_client()
-    if existing is not None:
-        return existing
-    from cc_adapter.core.runtime import create_client
+    from cc_adapter.core.runtime import get_or_create_client
 
-    cfg = get_config() or AppConfig()
-    return create_client(cfg)
-
-
-async def _anthropic_stream_with_retry(
-    client: CommandCodeClient,
-    body: dict,
-    headers: dict,
-    model: str,
-):
-    for attempt in range(2):
-        cc_stream = client.generate(body, headers)
-        translator = translate_anthropic_stream(cc_stream, model)
-        yielded_any = False
-        try:
-            async for chunk in translator:
-                yielded_any = True
-                yield chunk
-        except AdapterError as e:
-            logger.warning("upstream.retry", reason="empty_response", attempt=attempt + 1, max_attempts=2)
-            if not yielded_any and attempt == 0 and "empty response" in e.message.lower():
-                continue
-            yield _anthropic_sse_error(e.message)
-            return
-        return
+    return get_or_create_client()
 
 
 def _anthropic_sse_error(message: str) -> str:
@@ -102,13 +77,15 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
     try:
         if req.stream:
             return StreamingResponse(
-                _anthropic_stream_with_retry(current_client, cc_body, cc_headers, req.model),
+                stream_with_retry(
+                    lambda: current_client.generate(cc_body, cc_headers),
+                    lambda stream: translate_anthropic_stream(stream, req.model),
+                    logger,
+                    "anthropic.stream",
+                    error_fn=lambda msg: _anthropic_sse_error(msg),
+                ),
                 media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
+                headers=STREAMING_HEADERS,
             )
         else:
             return await retry_on_empty(

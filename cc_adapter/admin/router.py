@@ -22,6 +22,7 @@ from cc_adapter.core.runtime import (
     init as state_init,
 )
 from cc_adapter.core.config import AppConfig, DEFAULT_MODEL
+from cc_adapter.core.constants import VERSION
 from cc_adapter.command_code.body import make_cc_body, _make_config
 from cc_adapter.admin.usage_client import query_all_tokens, query_daily_usage
 from cc_adapter.command_code.headers import make_cc_headers
@@ -282,7 +283,7 @@ async def admin_health(_=Depends(verify_auth)):
     cfg = get_config()
     return {
         "status": "ok",
-        "version": "0.5.0",
+        "version": VERSION,
         "uptime": int(time.time() - _start_time),
         "cc_api_key_configured": bool(cfg and cfg.cc_api_key),
     }

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from cc_adapter.core.config import AppConfig
+from cc_adapter.core.constants import VERSION
 
 from cc_adapter.core.logging import configure_logging, CorrelationIDMiddleware
 from cc_adapter.core.errors import AdapterError
@@ -50,7 +51,7 @@ async def lifespan(app: FastAPI):
         await cc_client.aclose()
 
 
-app = FastAPI(title="Command Code Adapter", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="Command Code Adapter", version=VERSION, lifespan=lifespan)
 app.add_middleware(CorrelationIDMiddleware)
 
 cfg = AppConfig()

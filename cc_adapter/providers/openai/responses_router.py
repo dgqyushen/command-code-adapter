@@ -7,8 +7,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from cc_adapter.core.config import AppConfig
 from cc_adapter.core.errors import AdapterError
 from cc_adapter.core.auth import check_api_access
-from cc_adapter.core.retry import retry_on_empty
-from cc_adapter.core.runtime import get_config, get_client
+from cc_adapter.core.retry import retry_on_empty, stream_with_retry
+from cc_adapter.core.runtime import get_config, get_or_create_client
+from cc_adapter.core.constants import STREAMING_HEADERS
 from cc_adapter.providers.openai.responses_models import ResponseCreateRequest
 from cc_adapter.providers.openai.responses_response import (
     translate_responses_stream,
@@ -25,24 +26,6 @@ def _get_responses_translator():
     from cc_adapter.providers.openai.responses_request import ResponsesRequestTranslator
 
     return ResponsesRequestTranslator()
-
-
-async def _responses_stream_with_retry(generate_fn, model: str):
-    for attempt in range(2):
-        cc_stream = generate_fn()
-        translator = translate_responses_stream(cc_stream, model)
-        yielded_any = False
-        try:
-            async for chunk in translator:
-                yielded_any = True
-                yield chunk
-        except AdapterError as e:
-            logger.warning("responses.retry", reason="empty_response", attempt=attempt + 1, max_attempts=2)
-            if not yielded_any and attempt == 0 and "empty response" in e.message.lower():
-                continue
-            yield _sse("error", {"code": 502, "message": e.message})
-            return
-        return
 
 
 
@@ -72,11 +55,7 @@ async def create_response(req: ResponseCreateRequest, request: Request):
         cc_body, cc_headers = translator.translate(req)
         cc_body["params"]["stream"] = True
 
-        current_client = get_client()
-        if current_client is None:
-            from cc_adapter.core.runtime import create_client
-
-            current_client = create_client(cfg)
+        current_client = get_or_create_client()
         if not current_client.api_key:
             return JSONResponse(
                 status_code=401,
@@ -87,16 +66,15 @@ async def create_response(req: ResponseCreateRequest, request: Request):
 
         if req.stream:
             return StreamingResponse(
-                _responses_stream_with_retry(
+                stream_with_retry(
                     lambda: current_client.generate(cc_body, cc_headers),
-                    req.model,
+                    lambda stream: translate_responses_stream(stream, req.model),
+                    logger,
+                    "responses.stream",
+                    error_fn=lambda msg: _sse("error", {"code": 502, "message": msg}),
                 ),
                 media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
+                headers=STREAMING_HEADERS,
             )
         else:
             result = await retry_on_empty(

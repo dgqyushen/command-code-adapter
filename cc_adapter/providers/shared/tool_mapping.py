@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from functools import lru_cache
+from typing import Any
 
 
 SCHEMA_PARAM_MAP = {
@@ -84,3 +85,27 @@ def normalize_input_args(args: dict) -> dict:
     if not isinstance(args, dict):
         return args
     return {SCHEMA_PARAM_MAP.get(k, k): v for k, v in args.items()}
+
+
+def translate_tool_choice(tool_choice: Any) -> dict[str, Any] | None:
+    if tool_choice is None:
+        return None
+    if isinstance(tool_choice, str):
+        if tool_choice == "auto":
+            return {"type": "auto"}
+        elif tool_choice == "none":
+            return {"type": "none"}
+        elif tool_choice == "required":
+            return {"type": "any"}
+    if isinstance(tool_choice, dict):
+        function_info = tool_choice.get("function") or {}
+        name = function_info.get("name", "")
+        if name:
+            return {"type": "tool", "name": name}
+        tc_type = tool_choice.get("type", "")
+        if tc_type in ("auto", "none", "any"):
+            return tool_choice
+        name = tool_choice.get("name", "")
+        if tc_type == "function" and name:
+            return {"type": "tool", "name": name}
+    return {"type": "auto"}

@@ -1,7 +1,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 from cc_adapter.main import app
-from cc_adapter.core.auth import set_password
+from cc_adapter.core.auth import check_api_access, generate_token, set_password
 from cc_adapter.core.runtime import init as admin_state_init
 from cc_adapter.core.config import AppConfig
 from cc_adapter.command_code.client import CommandCodeClient
@@ -73,3 +73,30 @@ async def test_chat_completions_falls_back_to_module_client():
             json={"model": "test", "messages": [{"role": "user", "content": "hi"}]},
         )
     assert resp.status_code in (200, 401, 502)
+
+
+class TestCheckApiAccess:
+    def test_no_access_key_allows_all(self):
+        assert check_api_access("", "anything") is True
+        assert check_api_access("", "") is True
+
+    def test_valid_token_match(self):
+        assert check_api_access("sk-123", "sk-123") is True
+
+    def test_invalid_token_rejected(self):
+        assert check_api_access("sk-123", "wrong") is False
+
+    def test_empty_token_rejected(self):
+        assert check_api_access("sk-123", "") is False
+
+    def test_admin_token_valid(self):
+        set_password("admin-pass")
+        token = generate_token()
+        assert check_api_access("sk-123", token, admin_password="admin-pass") is True
+        set_password("")
+
+    def test_admin_token_without_password(self):
+        set_password("admin-pass")
+        token = generate_token()
+        assert check_api_access("sk-123", token) is False
+        set_password("")

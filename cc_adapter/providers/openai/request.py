@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from cc_adapter.providers.openai.models import ChatCompletionRequest
-from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema
+from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema, translate_tool_choice
 from cc_adapter.providers.shared.model_mapping import (
     resolve_model_id,
     clamp_reasoning_effort,
@@ -35,20 +35,7 @@ class RequestTranslator:
 
     @staticmethod
     def _translate_tool_choice(tool_choice: Any) -> dict[str, Any] | None:
-        if tool_choice is None:
-            return None
-        if isinstance(tool_choice, str):
-            if tool_choice == "auto":
-                return {"type": "auto"}
-            elif tool_choice == "none":
-                return {"type": "none"}
-            elif tool_choice == "required":
-                return {"type": "any"}
-        if isinstance(tool_choice, dict):
-            name = (tool_choice.get("function") or {}).get("name")
-            if name:
-                return {"type": "tool", "name": name}
-        return {"type": "auto"}
+        return translate_tool_choice(tool_choice)
 
     @staticmethod
     def _wrap_content(content: str | None) -> list[dict[str, Any]]:
