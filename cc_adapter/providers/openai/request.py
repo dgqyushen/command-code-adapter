@@ -9,7 +9,7 @@ from typing import Any
 from cc_adapter.providers.openai.models import ChatCompletionRequest
 from cc_adapter.providers.shared.tool_mapping import normalize_input_args, normalize_schema
 from cc_adapter.providers.shared.model_mapping import (
-    MODEL_PROVIDER_MAP,
+    resolve_model_id,
     clamp_reasoning_effort,
     NOT_SUPPORTED_PARAMS,
 )
@@ -107,13 +107,9 @@ class RequestTranslator:
                 others.append(d)
         return system_prompt, others
 
-    @staticmethod
-    def _normalize_model(model: str) -> str:
-        return MODEL_PROVIDER_MAP.get(model, model)
-
     def _build_body(self, req: ChatCompletionRequest, system_prompt: str | None, messages: list) -> dict:
         params: dict[str, Any] = {
-            "model": self._normalize_model(req.model),
+            "model": resolve_model_id(req.model),
             "messages": messages,
             "max_tokens": req.max_tokens or 64000,
             "stream": req.stream,
@@ -123,7 +119,7 @@ class RequestTranslator:
         if req.temperature is not None:
             params["temperature"] = req.temperature
         if req.reasoning_effort is not None:
-            model_id = self._normalize_model(req.model)
+            model_id = resolve_model_id(req.model)
             effort = clamp_reasoning_effort(model_id, req.reasoning_effort)
             if effort:
                 params["reasoning_effort"] = effort

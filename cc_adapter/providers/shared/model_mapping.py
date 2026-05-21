@@ -47,14 +47,14 @@ NOT_SUPPORTED_PARAMS = {
 }
 
 
-def _resolve_model_id(model_id: str) -> str:
+def resolve_model_id(model_id: str) -> str:
     return MODEL_PROVIDER_MAP.get(model_id, model_id)
 
 
 def clamp_reasoning_effort(model_id: str, effort: str | None) -> str | None:
     if effort is None:
         return None
-    canonical = _resolve_model_id(model_id)
+    canonical = resolve_model_id(model_id)
     supported = MODEL_REASONING_EFFORTS_MAP.get(canonical)
     if supported is None:
         return None

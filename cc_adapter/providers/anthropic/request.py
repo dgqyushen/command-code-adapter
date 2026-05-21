@@ -5,7 +5,7 @@ from typing import Any
 
 from cc_adapter.providers.anthropic.models import AnthropicRequest
 from cc_adapter.command_code.headers import make_cc_headers
-from cc_adapter.providers.shared.model_mapping import MODEL_PROVIDER_MAP, clamp_reasoning_effort
+from cc_adapter.providers.shared.model_mapping import resolve_model_id, clamp_reasoning_effort
 from cc_adapter.providers.shared.tool_mapping import normalize_input_args, normalize_schema
 from cc_adapter.command_code.body import _make_config, make_cc_body
 
@@ -48,13 +48,9 @@ class AnthropicTranslator:
             if value is not None:
                 logger.warning("Unsupported Anthropic parameter ignored: %s = %s", param, value)
 
-    @staticmethod
-    def _normalize_model(model: str) -> str:
-        return MODEL_PROVIDER_MAP.get(model, model)
-
     def _build_body(self, req: AnthropicRequest) -> dict[str, Any]:
         params: dict[str, Any] = {
-            "model": self._normalize_model(req.model),
+            "model": resolve_model_id(req.model),
             "messages": self._build_messages(req.messages),
             "max_tokens": req.max_tokens,
             "stream": True,
@@ -83,7 +79,7 @@ class AnthropicTranslator:
 
         if req.thinking and req.thinking.type in ("enabled", "adaptive"):
             effort = _budget_to_effort(req.thinking.budget_tokens)
-            clamped = clamp_reasoning_effort(self._normalize_model(req.model), effort)
+            clamped = clamp_reasoning_effort(resolve_model_id(req.model), effort)
             if clamped:
                 params["reasoning_effort"] = clamped
 

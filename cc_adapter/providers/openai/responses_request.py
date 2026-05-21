@@ -10,7 +10,7 @@ from cc_adapter.command_code.body import _make_config, make_cc_body
 from cc_adapter.command_code.headers import make_cc_headers
 from cc_adapter.core.errors import AdapterError
 from cc_adapter.providers.shared.model_mapping import (
-    MODEL_PROVIDER_MAP,
+    resolve_model_id,
     clamp_reasoning_effort,
 )
 from cc_adapter.providers.shared.tool_mapping import normalize_input_args, normalize_schema
@@ -100,13 +100,9 @@ class ResponsesRequestTranslator:
                     status_code=400,
                 )
 
-    @staticmethod
-    def _normalize_model(model: str) -> str:
-        return MODEL_PROVIDER_MAP.get(model, model)
-
     def _build_body(self, req: ResponseCreateRequest) -> dict[str, Any]:
         params: dict[str, Any] = {
-            "model": self._normalize_model(req.model),
+            "model": resolve_model_id(req.model),
             "messages": self._build_messages(req.input),
             "max_tokens": req.max_output_tokens or 64000,
             "stream": True,
@@ -118,7 +114,7 @@ class ResponsesRequestTranslator:
         if req.reasoning:
             effort = req.reasoning.get("effort")
             if effort:
-                model_id = self._normalize_model(req.model)
+                model_id = resolve_model_id(req.model)
                 clamped = clamp_reasoning_effort(model_id, effort)
                 if clamped:
                     params["reasoning_effort"] = clamped
