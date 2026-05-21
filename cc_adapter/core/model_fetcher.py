@@ -29,6 +29,7 @@ MODEL_PREFIXES = (
 )
 
 from cc_adapter.core.constants import NPM_URL, NPM_CACHE_TTL, NPM_ERROR_BACKOFF
+
 DEFAULT_CACHE_FILE = "models_cache.json"
 
 

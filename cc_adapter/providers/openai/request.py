@@ -7,7 +7,12 @@ import structlog
 from typing import Any
 
 from cc_adapter.providers.openai.models import ChatCompletionRequest
-from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema, translate_tool_choice
+from cc_adapter.providers.shared.tool_mapping import (
+    make_tool_call_block,
+    make_tool_result_block,
+    normalize_schema,
+    translate_tool_choice,
+)
 from cc_adapter.providers.shared.model_mapping import (
     resolve_model_id,
     clamp_reasoning_effort,

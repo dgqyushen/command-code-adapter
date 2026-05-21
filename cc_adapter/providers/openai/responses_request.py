@@ -13,7 +13,12 @@ from cc_adapter.providers.shared.model_mapping import (
     resolve_model_id,
     clamp_reasoning_effort,
 )
-from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema, translate_tool_choice
+from cc_adapter.providers.shared.tool_mapping import (
+    make_tool_call_block,
+    make_tool_result_block,
+    normalize_schema,
+    translate_tool_choice,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -232,9 +237,7 @@ class ResponsesRequestTranslator:
             for tool_call in item.get("tool_calls") or []:
                 tid, tool_name, args = self._parse_message_tool_call(tool_call)
                 tool_names[tid] = tool_name
-                content_blocks.append(
-                    make_tool_call_block(tid, tool_name, args)
-                )
+                content_blocks.append(make_tool_call_block(tid, tool_name, args))
         if not content_blocks:
             raise AdapterError(
                 message=f"message has no supported content for role '{role}'",

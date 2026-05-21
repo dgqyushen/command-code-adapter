@@ -125,7 +125,6 @@ async def _stream_with_retry(
     _log_stream_metrics(model, empty_retry_count, retry_latencies, first_token_latency)
 
 
-
 @router.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="openai")
@@ -176,7 +175,9 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     else:
         return await retry_on_empty(
             lambda: current_client.generate(cc_body, cc_headers),
-            lambda stream: collect_and_translate_nonstream(stream, req.model, start_time, req.reasoning_effort, tools_available),
+            lambda stream: collect_and_translate_nonstream(
+                stream, req.model, start_time, req.reasoning_effort, tools_available
+            ),
             logger,
             "openai.nonstream",
         )

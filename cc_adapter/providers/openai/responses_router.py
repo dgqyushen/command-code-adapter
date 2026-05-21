@@ -29,7 +29,6 @@ def _get_responses_translator():
     return ResponsesRequestTranslator()
 
 
-
 @router.post("/v1/responses")
 async def create_response(req: ResponseCreateRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="responses")

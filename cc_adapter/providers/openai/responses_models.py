@@ -54,5 +54,3 @@ class ResponseCreateRequest(BaseModel):
     conversation: str | dict[str, Any] | None = None
     prompt: dict[str, Any] | None = None
     context_management: list[dict[str, Any]] | None = None
-
-

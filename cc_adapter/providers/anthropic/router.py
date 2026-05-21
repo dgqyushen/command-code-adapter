@@ -40,7 +40,6 @@ def _anthropic_sse_error(message: str) -> str:
     return f"event: error\ndata: {data}\n\n"
 
 
-
 @router.post("/v1/messages")
 async def anthropic_chat(req: AnthropicRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="anthropic")

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from cc_adapter.core.version_checker import VersionChecker
     from cc_adapter.core.model_fetcher import ModelFetcher
 
+
 def create_client(cfg: AppConfig, *, timeout: float | None = None) -> CommandCodeClient:
     from cc_adapter.command_code.client import CommandCodeClient
 
@@ -41,6 +42,7 @@ def get_or_create_client() -> CommandCodeClient:
     global _cc_client
     if _cc_client is None:
         from cc_adapter.core.config import AppConfig
+
         _cc_client = create_client(get_config() or AppConfig())
     return _cc_client
 
