@@ -70,3 +70,15 @@ def clamp_reasoning_effort(model_id: str, effort: str | None) -> str | None:
         if _EFFORT_ORDER.index(s) >= effort_idx:
             return s
     return supported[-1]
+
+
+def refresh_maps(
+    provider_map: dict[str, str] | None = None,
+    reasoning_efforts: dict[str, list[str]] | None = None,
+) -> None:
+    if provider_map is not None:
+        MODEL_PROVIDER_MAP.clear()
+        MODEL_PROVIDER_MAP.update(provider_map)
+    if reasoning_efforts is not None:
+        MODEL_REASONING_EFFORTS_MAP.clear()
+        MODEL_REASONING_EFFORTS_MAP.update(reasoning_efforts)
