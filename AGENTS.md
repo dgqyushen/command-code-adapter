@@ -53,8 +53,10 @@ Both translate to CC /alpha/generate body, stream SSE back.
 
 - **Two translator pairs** in `providers/anthropic/` and `providers/openai/` (request→CC, response←CC); shared code in `providers/shared/`, `command_code/`, `core/`.
 - **Singletons** (`config`, `client`, `translators`) owned by `core/runtime.py`.
-- **Retry**: Both paths retry once on empty upstream response. OpenAI retry logic in `providers/openai/router.py`.
-- **Admin auth**: HMAC-signed token in `core/auth.py` (not JWT); embeds `exp` + password hash prefix.
+- **Retry**: Shared `retry_on_empty()` in `core/retry.py` — retries once on empty upstream response (non-stream only). OpenAI streaming has unique buffering logic in `providers/openai/router.py`.
+- **Admin auth**: HMAC-signed token in `core/auth.py` (not JWT); embeds `exp` + password hash prefix. API access validation also in `core/auth.py:check_api_access()`.
+- **ID generation**: `generate_id(prefix, length)` in `core/utils.py`.
+- **Tool blocks**: `make_tool_call_block()` / `make_tool_result_block()` in `providers/shared/tool_mapping.py`.
 - **Version checker**: Background npm polling (`registry.npmjs.org/command-code/latest`), cached 30min, fallback `0.25.2`. See `core/version_checker.py`.
 
 ## Translation quirks
