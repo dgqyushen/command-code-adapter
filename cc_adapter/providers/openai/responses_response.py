@@ -2,27 +2,11 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
 from typing import AsyncGenerator, Any
 
 from cc_adapter.core.errors import AdapterError, map_upstream_error
+from cc_adapter.core.utils import generate_id
 from cc_adapter.providers.shared.tool_mapping import normalize_args
-
-
-def _generate_id() -> str:
-    return f"resp_{uuid.uuid4().hex[:12]}"
-
-
-def _generate_msg_id() -> str:
-    return f"msg_{uuid.uuid4().hex[:12]}"
-
-
-def _generate_rs_id() -> str:
-    return f"rs_{uuid.uuid4().hex[:12]}"
-
-
-def _generate_fc_id() -> str:
-    return f"fc_{uuid.uuid4().hex[:12]}"
 
 
 def _sse(event_type: str, data: dict) -> str:
@@ -50,7 +34,7 @@ async def translate_responses_stream(
     cc_stream: AsyncGenerator[dict, None],
     model: str,
 ) -> AsyncGenerator[str, None]:
-    response_id = _generate_id()
+    response_id = generate_id("resp_")
     created = time.time()
 
     text_buf: list[str] = []
@@ -180,7 +164,7 @@ async def translate_responses_stream(
                 if current_item_type_val is not None:
                     for chunk in close_current_item():
                         yield chunk
-                reasoning_item_id = _generate_rs_id()
+                reasoning_item_id = generate_id("rs_")
                 set_current_item("reasoning", reasoning_item_id)
                 yield _sse(
                     "response.output_item.added",
@@ -226,7 +210,7 @@ async def translate_responses_stream(
                 if current_item_type_val is not None:
                     for chunk in close_current_item():
                         yield chunk
-                text_item_id = _generate_msg_id()
+                text_item_id = generate_id("msg_")
                 set_current_item("text", text_item_id)
                 yield _sse(
                     "response.output_item.added",
@@ -272,7 +256,7 @@ async def translate_responses_stream(
                 yield chunk
             has_any_output = True
             tool_name = event.get("toolName", "")
-            tool_call_id = event.get("toolCallId", f"call_{uuid.uuid4().hex[:8]}")
+            tool_call_id = event.get("toolCallId", generate_id("call_", 8))
             raw_args = event.get("input", {})
             args_str = json.dumps(normalize_args(tool_name, raw_args), ensure_ascii=False, separators=(",", ":"))
 
@@ -280,7 +264,7 @@ async def translate_responses_stream(
                 for chunk in close_current_item():
                     yield chunk
 
-            fc_id = _generate_fc_id()
+            fc_id = generate_id("fc_")
             fc_item_ids.append(fc_id)
             fc_call_ids.append(tool_call_id)
             fc_names.append(tool_name)
@@ -360,7 +344,7 @@ async def translate_responses_stream(
             full_text = "".join(text_buf)
             output_items: list[dict] = []
             if reasoning_buf:
-                rs_id = reasoning_item_id or _generate_rs_id()
+                rs_id = reasoning_item_id or generate_id("rs_")
                 output_items.append(
                     {
                         "type": "reasoning",
@@ -370,7 +354,7 @@ async def translate_responses_stream(
                     }
                 )
             if full_text:
-                msg_id = text_item_id or _generate_msg_id()
+                msg_id = text_item_id or generate_id("msg_")
                 output_items.append(
                     {
                         "type": "message",
@@ -385,7 +369,7 @@ async def translate_responses_stream(
                     {
                         "type": "function_call",
                         "id": fc_id,
-                        "call_id": fc_call_ids[i] if i < len(fc_call_ids) else f"call_{uuid.uuid4().hex[:8]}",
+                        "call_id": fc_call_ids[i] if i < len(fc_call_ids) else generate_id("call_", 8),
                         "name": fc_names[i] if i < len(fc_names) else "",
                         "arguments": fc_args[i] if i < len(fc_args) else "{}",
                         "status": "completed",
@@ -440,7 +424,7 @@ async def collect_and_translate_responses_nonstream(
     cc_stream: AsyncGenerator[dict, None],
     model: str,
 ) -> dict:
-    response_id = _generate_id()
+    response_id = generate_id("resp_")
     created = time.time()
     text_parts: list[str] = []
     reasoning_parts: list[str] = []
@@ -461,8 +445,8 @@ async def collect_and_translate_responses_nonstream(
             raw_args = event.get("input", {})
             tc = {
                 "type": "function_call",
-                "id": _generate_fc_id(),
-                "call_id": event.get("toolCallId", f"call_{uuid.uuid4().hex[:8]}"),
+                "id": generate_id("fc_"),
+                "call_id": event.get("toolCallId", generate_id("call_", 8)),
                 "name": tool_name,
                 "arguments": json.dumps(normalize_args(tool_name, raw_args), ensure_ascii=False),
                 "status": "completed",
@@ -490,7 +474,7 @@ async def collect_and_translate_responses_nonstream(
         output_items.append(
             {
                 "type": "reasoning",
-                "id": _generate_rs_id(),
+                "id": generate_id("rs_"),
                 "content": [{"type": "reasoning_text", "text": "".join(reasoning_parts)}],
                 "status": "completed",
             }
@@ -500,7 +484,7 @@ async def collect_and_translate_responses_nonstream(
         output_items.append(
             {
                 "type": "message",
-                "id": _generate_msg_id(),
+                "id": generate_id("msg_"),
                 "role": "assistant",
                 "status": "completed",
                 "content": [{"type": "output_text", "text": text, "annotations": []}],

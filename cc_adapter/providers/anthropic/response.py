@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 import logging
 import time
-import uuid
 from typing import AsyncGenerator
 
 from cc_adapter.providers.anthropic.models import AnthropicResponse, AnthropicUsage
 from cc_adapter.core.errors import AdapterError, map_upstream_error
+from cc_adapter.core.utils import generate_id
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
 logger = logging.getLogger(__name__)
@@ -24,15 +24,11 @@ def _map_stop_reason(cc_reason: str | None) -> str | None:
     return _STOP_REASON_MAP.get(cc_reason, "end_turn")
 
 
-def _generate_id() -> str:
-    return f"msg_{uuid.uuid4().hex[:16]}"
-
-
 async def collect_and_translate_anthropic_nonstream(
     cc_stream: AsyncGenerator[dict, None],
     model: str,
 ) -> AnthropicResponse:
-    response_id = _generate_id()
+    response_id = generate_id("msg_", 16)
     thinking_parts: list[str] = []
     text_parts: list[str] = []
     tool_calls: list[dict] = []
@@ -51,7 +47,7 @@ async def collect_and_translate_anthropic_nonstream(
         elif event_type == "tool-call":
             tc = {
                 "type": "tool_use",
-                "id": event.get("toolCallId", f"toolu_{uuid.uuid4().hex[:12]}"),
+                "id": event.get("toolCallId", generate_id("toolu_", 12)),
                 "name": event.get("toolName", ""),
                 "input": normalize_args(event.get("toolName", ""), event.get("input", {}), map_path=False),
             }
@@ -110,7 +106,7 @@ async def translate_anthropic_stream(
     cc_stream: AsyncGenerator[dict, None],
     model: str,
 ) -> AsyncGenerator[str, None]:
-    response_id = _generate_id()
+    response_id = generate_id("msg_", 16)
     content_index = 0
     in_thinking = False
     in_text = False
@@ -250,7 +246,7 @@ async def translate_anthropic_stream(
                     "index": content_index,
                     "content_block": {
                         "type": "tool_use",
-                        "id": event.get("toolCallId", f"toolu_{uuid.uuid4().hex[:12]}"),
+                        "id": event.get("toolCallId", generate_id("toolu_", 12)),
                         "name": tool_name,
                         "input": {},
                     },

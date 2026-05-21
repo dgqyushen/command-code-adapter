@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any
+
+
+def generate_id(prefix: str = "", length: int = 12) -> str:
+    return f"{prefix}{uuid.uuid4().hex[:length]}"
 
 
 def normalize_api_keys(value: str | list[str] | None) -> list[str]:

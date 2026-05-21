@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 import time
 from typing import AsyncGenerator
 
@@ -18,6 +17,7 @@ from cc_adapter.providers.openai.models import (
     Usage,
 )
 from cc_adapter.core.errors import AdapterError, map_upstream_error
+from cc_adapter.core.utils import generate_id
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
 logger = structlog.get_logger(__name__)
@@ -26,10 +26,6 @@ FINISH_REASON_MAP = {
     "end_turn": "stop",
     "tool_calls": "tool_calls",
 }
-
-
-def _generate_id() -> str:
-    return f"chatcmpl-{uuid.uuid4().hex[:12]}"
 
 
 def _now() -> int:
@@ -107,7 +103,7 @@ def _make_tool_call(cc_event: dict, index: int = 0, include_index: bool = False)
     args = normalize_args(tool_name, raw_args)
     return ToolCall(
         index=index if include_index else None,
-        id=cc_event.get("toolCallId", f"call_{uuid.uuid4().hex[:8]}"),
+        id=cc_event.get("toolCallId", generate_id("call_", 8)),
         function=FunctionCall(
             name=cc_event.get("toolName", ""),
             arguments=json.dumps(args),
@@ -123,7 +119,7 @@ async def translate_stream(
     tools_available: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Translate CC SSE events into OpenAI SSE chunks on the fly."""
-    response_id = _generate_id()
+    response_id = generate_id("chatcmpl-")
     created = _now()
     tool_call_index = 0
     usage = None
@@ -207,7 +203,7 @@ async def collect_and_translate_nonstream(
     tools_available: bool = False,
 ) -> ChatCompletionResponse:
     """Collect all CC SSE events and build a single ChatCompletionResponse."""
-    response_id = _generate_id()
+    response_id = generate_id("chatcmpl-")
     created = _now()
     content_parts: list[str] = []
     reasoning_parts: list[str] = []
