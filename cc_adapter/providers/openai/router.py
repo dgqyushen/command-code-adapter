@@ -5,11 +5,12 @@ import time
 
 import structlog
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 
 from cc_adapter.core.config import AppConfig
 from cc_adapter.core.errors import AdapterError, AuthenticationError
 from cc_adapter.core.auth import check_api_access
+from cc_adapter.core.headers import extract_token, auth_error_response, missing_key_response
 from cc_adapter.core.retry import retry_on_empty
 from cc_adapter.core.runtime import get_config, get_request_translator, get_or_create_client
 from cc_adapter.core.constants import STREAMING_HEADERS
@@ -135,20 +136,10 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="openai")
     cfg = get_config()
     if cfg and cfg.access_key:
-        auth = request.headers.get("Authorization", "")
-        token = auth[7:] if auth.startswith("Bearer ") else ""
+        token = extract_token(request)
         if not check_api_access(cfg.access_key, token, cfg.admin_password or ""):
             logger.warning("auth.failed", reason="invalid_access_key")
-            return JSONResponse(
-                status_code=401,
-                content={
-                    "error": {
-                        "message": "Invalid API key",
-                        "type": "invalid_request_error",
-                        "code": "invalid_api_key",
-                    }
-                },
-            )
+            return auth_error_response("openai")
 
     if cfg is None:
         cfg = AppConfig()
@@ -173,7 +164,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
 
     current_client = get_or_create_client()
     if not current_client.api_key:
-        raise AuthenticationError("CC_ADAPTER_CC_API_KEY is not configured")
+        return missing_key_response("openai")
 
     if req.stream:
         return StreamingResponse(

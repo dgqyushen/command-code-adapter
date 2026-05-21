@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from cc_adapter.core.config import AppConfig
 from cc_adapter.core.errors import AdapterError
 from cc_adapter.core.auth import check_api_access
+from cc_adapter.core.headers import extract_token, auth_error_response, missing_key_response
 from cc_adapter.core.retry import retry_on_empty, stream_with_retry
 from cc_adapter.core.runtime import get_config, get_or_create_client
 from cc_adapter.core.constants import STREAMING_HEADERS
@@ -34,13 +35,9 @@ async def create_response(req: ResponseCreateRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="responses")
     cfg = get_config() or AppConfig()
 
-    auth = request.headers.get("Authorization", "")
-    token = auth[7:] if auth.startswith("Bearer ") else ""
+    token = extract_token(request)
     if cfg.access_key and not check_api_access(cfg.access_key, token, cfg.admin_password or ""):
-        return JSONResponse(
-            status_code=401,
-            content={"error": {"type": "authentication_error", "message": "Invalid API key"}},
-        )
+        return auth_error_response("openai")
 
     logger.info(
         "responses.request",
@@ -57,12 +54,7 @@ async def create_response(req: ResponseCreateRequest, request: Request):
 
         current_client = get_or_create_client()
         if not current_client.api_key:
-            return JSONResponse(
-                status_code=401,
-                content={
-                    "error": {"type": "authentication_error", "message": "CC_ADAPTER_CC_API_KEY is not configured"}
-                },
-            )
+            return missing_key_response("openai")
 
         if req.stream:
             return StreamingResponse(
