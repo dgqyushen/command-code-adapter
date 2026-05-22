@@ -157,8 +157,6 @@ class ResponsesRequestTranslator:
                     message=f"tool_choice function '{name}' does not match any declared tool",
                     status_code=400,
                 )
-        if result.get("type") == "auto" and not req_tools:
-            pass
         return result
 
     def _build_messages(self, input_data: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
