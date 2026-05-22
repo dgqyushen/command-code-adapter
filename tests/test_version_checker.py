@@ -95,30 +95,28 @@ class TestVersionChecker:
 
     @pytest.mark.asyncio
     async def test_background_fetch_updates_version(self, respx_mock):
-        async def delayed(request):
-            await asyncio.sleep(0.1)
-            return httpx.Response(200, json={"version": "0.28.0"})
-
-        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(side_effect=delayed)
+        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
+            return_value=httpx.Response(200, json={"version": "0.28.0"})
+        )
         checker = VersionChecker()
-        checker._last_fetch_time = 0.0  # stale
-        checker.get_version()  # triggers background fetch
-        assert checker.get_version() == "0.25.2"  # default while fetching
-        await asyncio.sleep(0.2)
-        assert checker.get_version() == "0.28.0"  # updated after fetch
+        checker._last_fetch_time = None
+        checker.get_version()
+        assert checker.get_version() == "0.25.2"
+        if checker._fetch_task is not None:
+            await checker._fetch_task
+        assert checker.get_version() == "0.28.0"
 
     @pytest.mark.asyncio
     async def test_get_version_does_not_trigger_duplicate_fetches(self, respx_mock):
-        async def delayed_response(request):
-            await asyncio.sleep(0.2)
-            return httpx.Response(200, json={"version": "0.26.3"})
-
-        route = respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(side_effect=delayed_response)
+        route = respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
+            return_value=httpx.Response(200, json={"version": "0.26.3"})
+        )
         checker = VersionChecker()
-        checker._last_fetch_time = 0.0  # stale
+        checker._last_fetch_time = None
 
         checker.get_version()
-        checker.get_version()  # while first fetch still running
+        checker.get_version()
 
-        await asyncio.sleep(0.3)
+        if checker._fetch_task is not None:
+            await checker._fetch_task
         assert route.call_count == 1

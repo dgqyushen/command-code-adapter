@@ -28,7 +28,7 @@ class VersionChecker:
                 if not self._fetch_task or self._fetch_task.done():
                     self._fetch_task = loop.create_task(self._fetch_and_update())
             except RuntimeError:
-                pass
+                logger.debug("version.no_running_loop")
         return self._cached_version
 
     async def refresh(self) -> None:
