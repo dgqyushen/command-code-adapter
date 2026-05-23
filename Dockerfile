@@ -20,6 +20,7 @@ ENV VIRTUAL_ENV=/app/.venv \
 
 COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
 
+COPY pyproject.toml ./
 COPY cc_adapter/ ./cc_adapter/
 
 EXPOSE 8080
