@@ -21,6 +21,7 @@ from cc_adapter.admin.config_manager import ConfigManager
 from cc_adapter.admin.usage_client import query_all_tokens, query_daily_usage
 from cc_adapter.command_code.headers import make_cc_headers
 from cc_adapter.core.utils import normalize_api_keys
+from cc_adapter.core import log_buffer
 
 router = APIRouter(prefix="/admin/api")
 logger = structlog.get_logger(__name__)
@@ -251,3 +252,13 @@ async def admin_health(_=Depends(verify_auth)):
         "uptime": int(time.time() - _start_time),
         "cc_api_key_configured": bool(cfg and cfg.cc_api_key),
     }
+
+
+@router.get("/logs")
+async def get_logs(level: str = "INFO", search: str = "", limit: int = 200, _=Depends(verify_auth)):
+    if limit < 1:
+        limit = 200
+    if limit > 500:
+        limit = 500
+    entries = log_buffer.get_entries(level=level, search=search, limit=limit)
+    return {"entries": entries, "total_in_buffer": log_buffer.buffer_size()}
