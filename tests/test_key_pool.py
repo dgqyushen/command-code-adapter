@@ -21,11 +21,10 @@ class TestKeyPoolSelectKey:
         assert key == "key2"
 
     @pytest.mark.asyncio
-    async def test_select_key_skips_unavailable_keys(self):
+    async def test_select_key_skips_excluded_keys(self):
         pool = KeyPool(keys=["key1", "key2", "key3"], base_url="https://api.example.com")
         pool._credits = {"key1": 100, "key2": 200, "key3": 300}
-        pool.mark_unavailable("key1")
-        key = await pool.select_key()
+        key = await pool.select_key(exclude={"key1"})
         assert key == "key2"
 
     @pytest.mark.asyncio
@@ -49,18 +48,20 @@ class TestKeyPoolSelectKey:
         assert key == "keyB"
 
 
-class TestKeyPoolMarkUnavailable:
-    def test_mark_unavailable_adds_key_to_set(self):
-        pool = KeyPool(keys=["k1", "k2"], base_url="https://api.example.com")
-        pool.mark_unavailable("k1")
-        assert "k1" in pool._unavailable
+class TestKeyPoolSelectKeyExclude:
+    @pytest.mark.asyncio
+    async def test_select_key_skips_excluded_when_all_credits_zero(self):
+        pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
+        pool._credits = {"key1": 0, "key2": 0}
+        key = await pool.select_key(exclude={"key1"})
+        assert key == "key2"
 
-    def test_clear_unavailable_resets_set(self):
-        pool = KeyPool(keys=["k1", "k2"], base_url="https://api.example.com")
-        pool.mark_unavailable("k1")
-        pool.mark_unavailable("k2")
-        pool.clear_unavailable()
-        assert len(pool._unavailable) == 0
+    @pytest.mark.asyncio
+    async def test_select_key_returns_any_when_all_excluded_and_zero(self):
+        pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
+        pool._credits = {"key1": 0, "key2": 0}
+        key = await pool.select_key(exclude={"key1", "key2"})
+        assert key == "key1"
 
 
 class TestKeyPoolCreditsCache:
@@ -146,22 +147,3 @@ class TestKeyPoolRefresh:
 
         assert pool._last_error == "All credit fetches failed"
         assert pool._last_fetch is not None
-
-
-class TestKeyPoolSelectKeyUnavailable:
-    @pytest.mark.asyncio
-    async def test_select_key_skips_unavailable_when_all_credits_zero(self):
-        pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
-        pool._credits = {"key1": 0, "key2": 0}
-        pool.mark_unavailable("key1")
-        key = await pool.select_key()
-        assert key == "key2"
-
-    @pytest.mark.asyncio
-    async def test_select_key_returns_any_when_all_unavailable_and_zero(self):
-        pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
-        pool._credits = {"key1": 0, "key2": 0}
-        pool.mark_unavailable("key1")
-        pool.mark_unavailable("key2")
-        key = await pool.select_key()
-        assert key == "key1"

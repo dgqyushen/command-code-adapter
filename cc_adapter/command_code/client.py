@@ -94,15 +94,12 @@ class CommandCodeClient:
     async def generate(
         self, body: dict[str, Any], extra_headers: dict[str, str] | None = None
     ) -> AsyncGenerator[dict[str, Any], None]:
-        if self.key_pool is not None:
-            self.key_pool.clear_unavailable()
-
         tried_keys: set[str] = set()
         last_error: Exception | None = None
 
         while True:
             if self.key_pool is not None:
-                key = await self.key_pool.select_key()
+                key = await self.key_pool.select_key(exclude=tried_keys)
             else:
                 key = self.api_key
 
@@ -131,8 +128,6 @@ class CommandCodeClient:
                         mapped = map_upstream_error(response.status_code, text)
 
                         if response.status_code in (402, 429):
-                            if self.key_pool is not None:
-                                self.key_pool.mark_unavailable(key)
                             last_error = mapped
                             continue
 

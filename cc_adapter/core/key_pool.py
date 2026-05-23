@@ -17,30 +17,24 @@ class KeyPool:
         self._keys = list(keys)
         self._base_url = base_url.rstrip("/")
         self._credits: dict[str, int] = {}
-        self._unavailable: set[str] = set()
         self._last_fetch: float | None = None
         self._last_error: str | None = None
         self._fetch_task: asyncio.Task[None] | None = None
 
-    async def select_key(self) -> str | None:
+    async def select_key(self, exclude: set[str] | None = None) -> str | None:
         if self._is_stale():
             self._trigger_refresh()
+        skip = exclude or set()
         for key in self._keys:
-            if key in self._unavailable:
+            if key in skip:
                 continue
             credits = self._credits.get(key)
             if credits is None or credits > 0:
                 return key
         for key in self._keys:
-            if key not in self._unavailable:
+            if key not in skip:
                 return key
         return self._keys[0] if self._keys else None
-
-    def mark_unavailable(self, key: str) -> None:
-        self._unavailable.add(key)
-
-    def clear_unavailable(self) -> None:
-        self._unavailable.clear()
 
     def get_credits(self, key: str) -> int | None:
         return self._credits.get(key)
