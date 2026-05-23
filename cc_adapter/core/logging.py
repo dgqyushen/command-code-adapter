@@ -11,6 +11,8 @@ from structlog.stdlib import ProcessorFormatter
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+from cc_adapter.core import log_buffer
+
 
 SENSITIVE_KEYS = {
     "authorization",
@@ -48,12 +50,18 @@ def filter_sensitive_data(_logger: logging.Logger, _method_name: str, event_dict
     return event_dict
 
 
+def _log_buffer_processor(_logger: logging.Logger, _method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    log_buffer.append(event_dict.copy())
+    return event_dict
+
+
 _shared_processors: list[Any] = [
     structlog.contextvars.merge_contextvars,
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
     structlog.processors.TimeStamper(fmt="iso"),
     filter_sensitive_data,
+    _log_buffer_processor,
 ]
 
 
