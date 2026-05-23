@@ -5,13 +5,13 @@ import time
 from typing import AsyncGenerator, Any
 
 from cc_adapter.core.errors import AdapterError, map_upstream_error
-from cc_adapter.core.utils import generate_id, parse_usage
+from cc_adapter.core.utils import generate_id, parse_usage, format_sse
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
 
 def _sse(event_type: str, data: dict) -> str:
     payload = {"type": event_type, **data}
-    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+    return format_sse(event_type, payload)
 
 
 async def translate_responses_stream(

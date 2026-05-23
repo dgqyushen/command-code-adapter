@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import datetime
+import os
 from typing import Any
 
 
@@ -14,7 +15,7 @@ _CC_BODY_SKELETON: dict[str, Any] = {
 
 _STATIC_CONFIG = {
     "env": "adapter",
-    "workingDir": "/home/user/project",
+    "workingDir": os.getcwd(),
     "environment": "production",
     "structure": ["src/", "tests/", "docs/"],
     "isGitRepo": True,

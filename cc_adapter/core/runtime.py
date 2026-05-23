@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from cc_adapter.command_code.client import CommandCodeClient
     from cc_adapter.providers.openai.request import RequestTranslator
     from cc_adapter.providers.anthropic.request import AnthropicTranslator
+    from cc_adapter.providers.openai.responses_request import ResponsesRequestTranslator
     from cc_adapter.core.version_checker import VersionChecker
     from cc_adapter.core.model_fetcher import ModelFetcher
 
@@ -28,6 +29,7 @@ _config: AppConfig | None = None
 _cc_client: CommandCodeClient | None = None
 _request_translator: RequestTranslator | None = None
 _anthropic_translator: AnthropicTranslator | None = None
+_responses_translator: ResponsesRequestTranslator | None = None
 
 
 def get_config() -> AppConfig | None:
@@ -87,6 +89,15 @@ def get_anthropic_translator() -> AnthropicTranslator | None:
 
         _anthropic_translator = AnthropicTranslator()
     return _anthropic_translator
+
+
+def get_responses_translator() -> ResponsesRequestTranslator:
+    global _responses_translator
+    if _responses_translator is None:
+        from cc_adapter.providers.openai.responses_request import ResponsesRequestTranslator
+
+        _responses_translator = ResponsesRequestTranslator()
+    return _responses_translator
 
 
 _version_checker: VersionChecker | None = None

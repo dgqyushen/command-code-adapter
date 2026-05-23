@@ -36,6 +36,18 @@ async def test_chat_completions_with_valid_access_key():
 
 @pytest.mark.asyncio
 async def test_chat_completions_with_invalid_access_key():
+    import cc_adapter.core.runtime as rt
+    from cc_adapter.core.auth import set_password
+
+    rt._config = None
+    rt._cc_client = None
+    rt._request_translator = None
+    rt._anthropic_translator = None
+    cfg = AppConfig(access_key="test_access_key", admin_password="admin123")
+    client = CommandCodeClient(base_url=cfg.cc_base_url, api_key="")
+    admin_state_init(cfg, client)
+    set_password("admin123")
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/chat/completions",

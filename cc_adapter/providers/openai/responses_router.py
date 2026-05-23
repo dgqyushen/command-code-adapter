@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from cc_adapter.core.errors import AdapterError
 from cc_adapter.core.retry import retry_on_empty, stream_with_retry
-from cc_adapter.core.runtime import get_config, get_or_create_client
+from cc_adapter.core.runtime import get_config, get_or_create_client, get_responses_translator
 from cc_adapter.core.constants import STREAMING_HEADERS
 from cc_adapter.providers.openai.responses_models import ResponseCreateRequest
 from cc_adapter.providers.openai.responses_response import (
@@ -18,12 +18,6 @@ from cc_adapter.providers.openai.responses_response import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
-
-
-def _get_responses_translator():
-    from cc_adapter.providers.openai.responses_request import ResponsesRequestTranslator
-
-    return ResponsesRequestTranslator()
 
 
 @router.post("/v1/responses")
@@ -39,7 +33,7 @@ async def create_response(req: ResponseCreateRequest, request: Request):
     )
 
     try:
-        translator = _get_responses_translator()
+        translator = get_responses_translator()
         cc_body, cc_headers = translator.translate(req)
         cc_body["params"]["stream"] = True
 

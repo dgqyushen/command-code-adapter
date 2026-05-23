@@ -52,3 +52,22 @@ class TestGenerateId:
     def test_unique_values(self):
         results = {generate_id() for _ in range(100)}
         assert len(results) == 100  # all unique
+
+
+def test_get_or_create_client_fallback():
+    from cc_adapter.core.runtime import _config, _cc_client, get_or_create_client
+
+    saved_config = _config
+    saved_client = _cc_client
+    try:
+        import cc_adapter.core.runtime as rt
+
+        rt._config = None
+        rt._cc_client = None
+        client = get_or_create_client()
+        assert client is not None
+    finally:
+        import cc_adapter.core.runtime as rt
+
+        rt._config = saved_config
+        rt._cc_client = saved_client

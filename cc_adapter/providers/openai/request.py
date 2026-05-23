@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import datetime
-import json
 import structlog
 from typing import Any
 
@@ -48,11 +47,9 @@ class RequestTranslator:
 
     @staticmethod
     def _parse_tool_arguments(raw: str) -> dict[str, Any]:
-        try:
-            parsed = json.loads(raw or "{}")
-        except ValueError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
+        from cc_adapter.core.utils import parse_tool_arguments
+
+        return parse_tool_arguments(raw)
 
     def _tool_call_block(self, tool_call) -> dict[str, Any]:
         return make_tool_call_block(

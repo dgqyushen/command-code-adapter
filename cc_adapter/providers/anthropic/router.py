@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import structlog
 
 from fastapi import APIRouter, Request
@@ -17,6 +16,7 @@ from cc_adapter.core.retry import retry_on_empty, stream_with_retry
 from cc_adapter.core.runtime import get_config, get_anthropic_translator
 from cc_adapter.core.constants import STREAMING_HEADERS
 from cc_adapter.core.errors import AdapterError
+from cc_adapter.core.utils import format_sse
 
 logger = structlog.get_logger(__name__)
 
@@ -30,11 +30,7 @@ def _get_client() -> CommandCodeClient:
 
 
 def _anthropic_sse_error(message: str) -> str:
-    data = json.dumps(
-        {"type": "error", "error": {"type": "api_error", "message": message}},
-        ensure_ascii=False,
-    )
-    return f"event: error\ndata: {data}\n\n"
+    return format_sse("error", {"type": "error", "error": {"type": "api_error", "message": message}})
 
 
 @router.post("/v1/messages")

@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 
 from cc_adapter.providers.anthropic.models import AnthropicResponse, AnthropicUsage
 from cc_adapter.core.errors import AdapterError, map_upstream_error
-from cc_adapter.core.utils import generate_id
+from cc_adapter.core.utils import generate_id, format_sse
 from cc_adapter.providers.shared.tool_mapping import normalize_args
 
 logger = structlog.get_logger(__name__)
@@ -99,7 +99,7 @@ async def collect_and_translate_anthropic_nonstream(
 
 
 def _anthropic_sse(event_type: str, data: dict) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    return format_sse(event_type, data)
 
 
 async def translate_anthropic_stream(

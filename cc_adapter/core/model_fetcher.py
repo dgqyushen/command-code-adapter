@@ -89,7 +89,7 @@ class ModelFetcher:
         if self._fetched_at is None:
             return True
         ttl = NPM_ERROR_BACKOFF if self._last_error else NPM_CACHE_TTL
-        return time.time() - self._fetched_at > ttl
+        return time.monotonic() - self._fetched_at > ttl
 
     def _load_cache(self) -> bool:
         if not self._cache_path.exists():
@@ -110,7 +110,7 @@ class ModelFetcher:
         models: list[dict] = []
         provider_map: dict[str, str] = {}
         reasoning_efforts: dict[str, list[str]] = {}
-        now = int(time.time())
+        now = int(time.monotonic())
 
         for e in entries:
             model_id = e["id"]
@@ -155,7 +155,7 @@ class ModelFetcher:
                 raise ValueError("could not determine latest version")
 
             if self._cached_version == latest_version and self._fetched_at is not None:
-                self._fetched_at = time.time()
+                self._fetched_at = time.monotonic()
                 self._sync_maps()
                 logger.info("model_fetcher.version_unchanged", version=latest_version)
                 return
@@ -175,20 +175,20 @@ class ModelFetcher:
 
             cache = {
                 "version": latest_version,
-                "fetched_at": time.time(),
+                "fetched_at": time.monotonic(),
                 "models": entries,
             }
             self._atomic_write_cache(cache)
 
             self._build_maps(entries)
             self._cached_version = latest_version
-            self._fetched_at = time.time()
+            self._fetched_at = time.monotonic()
             self._sync_maps()
             logger.info("model_fetcher.updated", version=latest_version, count=len(entries))
 
         except Exception as e:
             self._last_error = str(e)
-            self._fetched_at = time.time()
+            self._fetched_at = time.monotonic()
             logger.warning("model_fetcher.fetch_failed", error=str(e))
 
     def _extract_models(self, tarball_data: bytes) -> list[dict]:
