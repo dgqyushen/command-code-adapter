@@ -244,6 +244,7 @@ function renderTab(name) {
   else if (name === "config") renderConfig();
   else if (name === "playground") renderPlayground();
   else if (name === "usage") renderUsage();
+  else if (name === "logs") renderLogs();
 }
 
 // Dashboard
@@ -949,6 +950,117 @@ async function loadUsageAnalyticsData() {
   } catch (e) {
     container.innerHTML = `<div style="text-align:center;padding:48px;color:var(--error)">Error: ${escapeHtml(e.message)}</div>`;
   }
+}
+
+let logsTimer = null;
+
+async function renderLogs() {
+  if (logsTimer) { clearInterval(logsTimer); logsTimer = null; }
+
+  const el = document.getElementById("tab-logs");
+  el.innerHTML = `
+    <div class="log-viewer">
+      <div class="log-toolbar">
+        <label class="log-toolbar-label">${t("logLevel")}:</label>
+        <select id="log-level">
+          <option value="DEBUG">DEBUG</option>
+          <option value="INFO" selected>INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+        <label class="log-toolbar-label">${t("logSearch")}:</label>
+        <input id="log-search" type="text" placeholder="keyword...">
+        <label class="log-autorefresh-label">
+          <input type="checkbox" id="log-autorefresh">
+          <span>${t("logAutoRefresh")}</span>
+        </label>
+        <button class="btn btn-secondary" id="log-refresh-btn">${t("logRefresh")}</button>
+      </div>
+      <div class="log-entries" id="log-entries">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">
+          ${t("logLoading")}
+        </div>
+      </div>
+      <div class="log-status" id="log-status"></div>
+    </div>`;
+
+  const levelSelect = document.getElementById("log-level");
+  const searchInput = document.getElementById("log-search");
+  const autoRefreshCb = document.getElementById("log-autorefresh");
+  const refreshBtn = document.getElementById("log-refresh-btn");
+
+  const fetchLogs = async () => {
+    const level = levelSelect.value;
+    const search = searchInput.value;
+    const url = `/admin/api/logs?level=${encodeURIComponent(level)}&search=${encodeURIComponent(search)}&limit=200`;
+    try {
+      const resp = await api("GET", url);
+      const data = await resp.json();
+      renderLogEntries(data.entries, data.total_in_buffer);
+    } catch (e) {
+      const entriesEl = document.getElementById("log-entries");
+      entriesEl.innerHTML = `<div class="log-error">Error: ${e.message}</div>`;
+    }
+  };
+
+  levelSelect.onchange = fetchLogs;
+  let searchDebounce = null;
+  searchInput.oninput = () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(fetchLogs, 300);
+  };
+  refreshBtn.onclick = fetchLogs;
+
+  autoRefreshCb.onchange = () => {
+    if (autoRefreshCb.checked) {
+      logsTimer = setInterval(fetchLogs, 5000);
+    } else {
+      clearInterval(logsTimer);
+      logsTimer = null;
+    }
+  };
+
+  await fetchLogs();
+}
+
+function renderLogEntries(entries, totalInBuffer) {
+  const container = document.getElementById("log-entries");
+  const statusEl = document.getElementById("log-status");
+
+  if (!entries || entries.length === 0) {
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">${t("logNoMatch")}</div>`;
+    statusEl.textContent = "";
+    return;
+  }
+
+  let html = "";
+  for (const e of entries) {
+    const level = (e.level || "info").toUpperCase();
+    const levelLower = level.toLowerCase();
+    const ts = (e.timestamp || "").slice(11, 19) || "";
+    const event = e.event || "";
+    let fields = "";
+    const skipKeys = new Set(["timestamp", "level", "event", "logger", "request_id"]);
+    for (const [k, v] of Object.entries(e)) {
+      if (skipKeys.has(k)) continue;
+      if (v === null || v === undefined) continue;
+      fields += ` <span class="log-field">${k}=${escapeHtml(String(v))}</span>`;
+    }
+    if (e.request_id) {
+      fields += ` <span class="log-field">req=${escapeHtml(e.request_id.slice(0, 8))}</span>`;
+    }
+    html += `<div class="log-entry">
+      <span class="log-ts">${ts}</span>
+      <span class="log-level ${levelLower}">${level}</span>
+      <span class="log-event">${escapeHtml(event)}</span>${fields}
+    </div>`;
+  }
+
+  container.innerHTML = html;
+  const statusText = t("logStatus")
+    .replace("{shown}", entries.length)
+    .replace("{total}", totalInBuffer);
+  statusEl.textContent = statusText;
 }
 
 // Init
