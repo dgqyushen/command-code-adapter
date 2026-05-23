@@ -28,39 +28,18 @@ const i18n = {
     stream: "流式输出",
     send: "发送",
     clear: "清空",
+    thinking: "思考强度",
+    thinkingOff: "关闭",
+    logs: "日志",
+    logLevel: "级别",
+    logSearch: "搜索",
+    logAutoRefresh: "自动刷新 (5s)",
+    logRefresh: "刷新",
+    logNoEntries: "暂无日志",
+    logNoMatch: "无匹配日志",
+    logLoading: "加载中...",
+    logStatus: "显示 {shown} 条 (缓冲区共 {total} 条)",
     response: "响应",
-    configKey: "API Key",
-    configBaseUrl: "Base URL",
-    configHost: "监听地址",
-    configPort: "监听端口",
-    configLogLevel: "日志级别",
-    rawMode: "源文件编辑",
-    formMode: "表单编辑",
-    rawSave: "保存源文件",
-    rawSaved: "源文件保存成功",
-    themeDark: "Dark",
-    themeLight: "Light",
-    tokenUsage: "Token 用量",
-    manage: "管理",
-    refresh: "刷新",
-    noTokens: "暂未配置 Token",
-    addToken: "添加 Token",
-    tokenLabel: "标签",
-    tokenKey: "API Key",
-    tokenAccount: "用户名",
-    tokenPlan: "套餐",
-    tokenPeriod: "结算周期",
-    tokenUsed: "已用量",
-    tokenTotal: "总额度",
-    tokenModels: "模型分布",
-    tokenNormal: "正常",
-    tokenInvalid: "无效",
-    tokenNetworkError: "网络错误",
-    tokenManageTitle: "管理 Token",
-    tokenRemove: "删除",
-    tokenSave: "保存",
-    tokenCancel: "取消",
-    reasoningEffortMax: "启用 Max Prompt（仅 deepseek-v4）",
     usage: "使用统计",
     usageRange1d: "近1天",
     usageRange7d: "近7天",
@@ -107,39 +86,18 @@ const i18n = {
     stream: "Stream",
     send: "Send",
     clear: "Clear",
+    thinking: "Thinking",
+    thinkingOff: "Off",
+    logs: "Logs",
+    logLevel: "Level",
+    logSearch: "Search",
+    logAutoRefresh: "Auto-refresh 5s",
+    logRefresh: "Refresh",
+    logNoEntries: "No log entries",
+    logNoMatch: "No matching entries",
+    logLoading: "Loading...",
+    logStatus: "Showing {shown} entries (filtered from {total} in buffer)",
     response: "Response",
-    configKey: "API Key",
-    configBaseUrl: "Base URL",
-    configHost: "Host",
-    configPort: "Port",
-    configLogLevel: "Log Level",
-    rawMode: "Raw Edit",
-    formMode: "Form Edit",
-    rawSave: "Save Raw",
-    rawSaved: "Raw file saved",
-    themeDark: "Dark",
-    themeLight: "Light",
-    tokenUsage: "Token Usage",
-    manage: "Manage",
-    refresh: "Refresh",
-    noTokens: "No tokens configured",
-    addToken: "Add Token",
-    tokenLabel: "Label",
-    tokenKey: "API Key",
-    tokenAccount: "User",
-    tokenPlan: "Plan",
-    tokenPeriod: "Period",
-    tokenUsed: "Used",
-    tokenTotal: "Total",
-    tokenModels: "Models",
-    tokenNormal: "Normal",
-    tokenInvalid: "Invalid",
-    tokenNetworkError: "Network Error",
-    tokenManageTitle: "Manage Tokens",
-    tokenRemove: "Remove",
-    tokenSave: "Save",
-    tokenCancel: "Cancel",
-    reasoningEffortMax: "Enable Max Prompt (deepseek-v4 only)",
     usage: "Usage",
     usageRange1d: "1 Day",
     usageRange7d: "7 Days",
@@ -647,9 +605,9 @@ async function renderPlayground() {
     <div class="chat-container">
       <div class="chat-model-bar">
         <select id="pg-model-select">${window._modelSelectHtml}</select>
-        <label class="checkbox-label" id="pg-re-max-label" style="font-size:13px;display:none">
-          <input type="checkbox" id="pg-re-max" checked> ${t("reasoningEffortMax")}
-        </label>
+        <select id="pg-reasoning-select" style="max-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px">
+          <option value="">${t("thinkingOff")}</option>
+        </select>
         <button class="btn btn-secondary" id="pg-clear">${t("clear")}</button>
       </div>
       <div class="chat-messages" id="pg-chat"></div>
@@ -663,12 +621,11 @@ async function renderPlayground() {
   document.getElementById("pg-clear").onclick = clearChat;
 
   const modelSelect = document.getElementById("pg-model-select");
-  modelSelect.onchange = () => {
-    const model = modelSelect.value;
-    const isDeepseekV4 = model && model.includes("deepseek-v4");
-    document.getElementById("pg-re-max-label").style.display = isDeepseekV4 ? "" : "none";
+  const reasoningSelect = document.getElementById("pg-reasoning-select");
+  modelSelect.onchange = async () => {
+    await updateReasoningDropdown(modelSelect.value, reasoningSelect);
   };
-  modelSelect.onchange();
+  await updateReasoningDropdown(modelSelect.value, reasoningSelect);
 
   const textarea = document.getElementById("pg-input");
   textarea.oninput = () => {
@@ -689,6 +646,22 @@ function clearChat() {
   pgMessages = [];
   const chatEl = document.getElementById("pg-chat");
   if (chatEl) chatEl.innerHTML = "";
+}
+
+async function updateReasoningDropdown(modelId, selectEl) {
+  selectEl.innerHTML = `<option value="">${t("thinkingOff")}</option>`;
+  try {
+    const resp = await fetch("/admin/api/reasoning-effort");
+    if (resp.ok) {
+      const data = await resp.json();
+      const efforts = data.model_reasoning_efforts?.[modelId];
+      if (efforts && efforts.length > 0) {
+        for (const e of efforts) {
+          selectEl.innerHTML += `<option value="${e}">${e}</option>`;
+        }
+      }
+    }
+  } catch {}
 }
 
 function appendBubble(role, text, streaming) {
@@ -739,12 +712,10 @@ async function sendChatMessage() {
   let requestError = null;
 
   try {
-    const reMaxEnabled = document.getElementById("pg-re-max")?.checked;
-    const isDeepseekV4 = model && model.includes("deepseek-v4");
-
+    const reasoningValue = document.getElementById("pg-reasoning-select")?.value;
     const body = { model, messages: pgMessages, stream: true };
-    if (isDeepseekV4 && reMaxEnabled) {
-      body.reasoning_effort = "max";
+    if (reasoningValue) {
+      body.reasoning_effort = reasoningValue;
     }
 
     const response = await fetch("/v1/chat/completions", {
