@@ -17,7 +17,7 @@ from cc_adapter.core.auth import check_api_access
 from cc_adapter.core.headers import extract_token, auth_error_response, missing_key_response
 from cc_adapter.core.retry import retry_on_empty, stream_with_retry
 from cc_adapter.core.runtime import get_config, get_anthropic_translator
-from cc_adapter.core.config import AppConfig
+from cc_adapter.core.config import get_config_or_default
 from cc_adapter.core.constants import STREAMING_HEADERS
 from cc_adapter.core.errors import AdapterError
 
@@ -43,7 +43,7 @@ def _anthropic_sse_error(message: str) -> str:
 @router.post("/v1/messages")
 async def anthropic_chat(req: AnthropicRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="anthropic")
-    cfg = get_config() or AppConfig()
+    cfg = get_config_or_default()
 
     token = extract_token(request)
     if cfg.access_key and not check_api_access(cfg.access_key, token, cfg.admin_password or ""):

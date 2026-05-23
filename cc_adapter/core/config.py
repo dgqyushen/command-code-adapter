@@ -29,3 +29,10 @@ class AppConfig(BaseSettings):
     @classmethod
     def coerce_api_key(cls, v):
         return normalize_api_keys(v)
+
+
+def get_config_or_default() -> AppConfig:
+    from cc_adapter.core.runtime import get_config
+
+    cfg = get_config()
+    return cfg if cfg else AppConfig()

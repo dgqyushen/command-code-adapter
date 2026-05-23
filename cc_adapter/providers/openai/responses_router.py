@@ -4,7 +4,7 @@ import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from cc_adapter.core.config import AppConfig
+from cc_adapter.core.config import get_config_or_default
 from cc_adapter.core.errors import AdapterError
 from cc_adapter.core.auth import check_api_access
 from cc_adapter.core.headers import extract_token, auth_error_response, missing_key_response
@@ -32,7 +32,7 @@ def _get_responses_translator():
 @router.post("/v1/responses")
 async def create_response(req: ResponseCreateRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="responses")
-    cfg = get_config() or AppConfig()
+    cfg = get_config_or_default()
 
     token = extract_token(request)
     if cfg.access_key and not check_api_access(cfg.access_key, token, cfg.admin_password or ""):

@@ -39,3 +39,29 @@ def parse_usage(raw_usage: dict | None) -> dict | None:
     if reasoning_tokens:
         result["output_tokens_details"] = {"reasoning_tokens": reasoning_tokens}
     return result
+
+
+def format_sse(event: str | None, data: dict[str, Any] | str) -> str:
+    if isinstance(data, dict):
+        json_data = json.dumps(data, ensure_ascii=False, default=str)
+    else:
+        json_data = data
+    if event:
+        return f"event: {event}\ndata: {json_data}\n\n"
+    return f"data: {json_data}\n\n"
+
+
+def parse_tool_arguments(raw: Any, label: str = "arguments") -> dict[str, Any]:
+    if raw is None or raw == "":
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str):
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    if isinstance(parsed, dict):
+        return parsed
+    return {}

@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from cc_adapter.core.config import AppConfig
+from cc_adapter.core.config import AppConfig, get_config_or_default
 from cc_adapter.core.constants import VERSION
 
 from cc_adapter.core.logging import configure_logging, CorrelationIDMiddleware
@@ -32,7 +32,7 @@ logger = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    cfg = get_config() or AppConfig()
+    cfg = get_config_or_default()
     configure_logging(log_format=cfg.log_format, log_level=cfg.log_level)
     set_password(cfg.admin_password)
     logger.info("app.start", base=cfg.cc_base_url, port=cfg.port)
@@ -96,7 +96,7 @@ async def health():
 def run():
     import uvicorn
 
-    cfg = get_config() or AppConfig()
+    cfg = get_config_or_default()
     uvicorn.run(
         "cc_adapter.main:app",
         host=cfg.host,

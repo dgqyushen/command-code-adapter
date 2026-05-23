@@ -7,7 +7,7 @@ import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from cc_adapter.core.config import AppConfig
+from cc_adapter.core.config import get_config_or_default
 from cc_adapter.core.errors import AdapterError, AuthenticationError
 from cc_adapter.core.auth import check_api_access
 from cc_adapter.core.headers import extract_token, auth_error_response, missing_key_response
@@ -128,15 +128,12 @@ async def _stream_with_retry(
 @router.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="openai")
-    cfg = get_config()
-    if cfg and cfg.access_key:
+    cfg = get_config_or_default()
+    if cfg.access_key:
         token = extract_token(request)
         if not check_api_access(cfg.access_key, token, cfg.admin_password or ""):
             logger.warning("auth.failed", reason="invalid_access_key")
             return auth_error_response("openai")
-
-    if cfg is None:
-        cfg = AppConfig()
 
     logger.info(
         "openai.request",
