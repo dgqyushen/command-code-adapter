@@ -23,7 +23,7 @@ def _load_version() -> str:
         with open(_pyproject, "rb") as f:
             return tomllib.load(f)["tool"]["poetry"]["version"]
     except (FileNotFoundError, KeyError):
-        return "0.6.0"
+        return "0.7.0"
 
 
 VERSION: str = _load_version()
