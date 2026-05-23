@@ -13,8 +13,8 @@ NPM_URL: str = "https://registry.npmjs.org/command-code/latest"
 NPM_CACHE_TTL: int = 1800
 NPM_ERROR_BACKOFF: int = 60
 
-KEY_CREDITS_CACHE_TTL = 1800
-KEY_CREDITS_ERROR_BACKOFF = 60
+KEY_CREDITS_CACHE_TTL: int = 1800
+KEY_CREDITS_ERROR_BACKOFF: int = 60
 
 
 def _load_version() -> str:
