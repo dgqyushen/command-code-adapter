@@ -24,7 +24,7 @@ def get_entries(*, level: str = "INFO", search: str = "", limit: int = 200) -> l
     with _lock:
         for entry in reversed(_buffer):
             entry_level = str(entry.get("level", "")).upper()
-            if _LEVEL_ORDER.get(entry_level, 0) < min_level:
+            if _LEVEL_ORDER.get(entry_level, -1) != min_level:
                 continue
             if search_lower:
                 if not _entry_matches(entry, search_lower):

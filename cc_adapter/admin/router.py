@@ -109,7 +109,7 @@ _MODEL_DISPLAY_PREFIXES: dict[str, str] = {
 def _format_model_display_name(bare_name: str) -> str:
     for prefix, replacement in _MODEL_DISPLAY_PREFIXES.items():
         if bare_name.startswith(prefix):
-            suffix = bare_name[len(prefix):]
+            suffix = bare_name[len(prefix) :]
             suffix = " ".join(word.capitalize() for word in suffix.split("-"))
             return replacement + suffix
     return bare_name.replace("-", " ").title()
@@ -261,4 +261,5 @@ async def get_logs(level: str = "INFO", search: str = "", limit: int = 200, _=De
     if limit > 500:
         limit = 500
     entries = log_buffer.get_entries(level=level, search=search, limit=limit)
+    entries = [e for e in entries if e.get("path") != "/admin/api/logs"]
     return {"entries": entries, "total_in_buffer": log_buffer.buffer_size()}

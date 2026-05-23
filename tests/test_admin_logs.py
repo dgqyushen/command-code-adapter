@@ -27,7 +27,7 @@ async def test_logs_requires_auth():
 @pytest.mark.asyncio
 async def test_logs_returns_entries():
     append_log({"timestamp": "2026-05-23T14:30:45", "level": "INFO", "event": "test.event", "msg": "hello"})
-    append_log({"timestamp": "2026-05-23T14:30:46", "level": "ERROR", "event": "test.error", "msg": "fail"})
+    append_log({"timestamp": "2026-05-23T14:30:46", "level": "INFO", "event": "test.error", "msg": "fail"})
 
     token = generate_token()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -48,7 +48,7 @@ async def test_logs_level_filter():
 
     token = generate_token()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/admin/api/logs?level=WARNING", headers={"Authorization": f"Bearer {token}"})
+        resp = await client.get("/admin/api/logs?level=ERROR", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     data = resp.json()
     assert len(data["entries"]) == 1

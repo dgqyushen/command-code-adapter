@@ -4,9 +4,9 @@ from cc_adapter.core.log_buffer import append, get_entries, buffer_size, clear
 def test_append_and_retrieve():
     clear()
     append({"timestamp": "2026-05-23T14:30:45", "level": "INFO", "event": "test.event", "msg": "hello"})
-    append({"timestamp": "2026-05-23T14:30:46", "level": "ERROR", "event": "test.error", "msg": "fail"})
+    append({"timestamp": "2026-05-23T14:30:46", "level": "INFO", "event": "test.error", "msg": "fail"})
 
-    all_entries = get_entries(level="DEBUG")
+    all_entries = get_entries(level="INFO")
     assert len(all_entries) == 2
     # Newest first (reversed)
     assert all_entries[0]["event"] == "test.error"
@@ -20,10 +20,14 @@ def test_level_filter():
     append({"timestamp": "2026-05-23T14:30:47", "level": "WARNING", "event": "warn.event"})
     append({"timestamp": "2026-05-23T14:30:48", "level": "ERROR", "event": "error.event"})
 
-    assert len(get_entries(level="INFO")) == 3  # INFO, WARNING, ERROR
-    assert len(get_entries(level="WARNING")) == 2  # WARNING, ERROR
-    assert len(get_entries(level="ERROR")) == 1  # ERROR
-    assert len(get_entries(level="DEBUG")) == 4  # all
+    assert len(get_entries(level="INFO")) == 1
+    assert get_entries(level="INFO")[0]["event"] == "info.event"
+    assert len(get_entries(level="WARNING")) == 1
+    assert get_entries(level="WARNING")[0]["event"] == "warn.event"
+    assert len(get_entries(level="ERROR")) == 1
+    assert get_entries(level="ERROR")[0]["event"] == "error.event"
+    assert len(get_entries(level="DEBUG")) == 1
+    assert get_entries(level="DEBUG")[0]["event"] == "debug.event"
 
 
 def test_search():
