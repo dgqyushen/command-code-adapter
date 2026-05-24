@@ -51,9 +51,15 @@ async def _stream_with_web_search(
 
     config = get_config()
 
-    events = await _events_to_list(client.generate(cc_body, cc_headers))
+    injected = cc_body.get("params", {}).pop("_adapter_web_search", False)
 
-    if not _has_web_search(events):
+    try:
+        events = await _events_to_list(client.generate(cc_body, cc_headers))
+    except Exception as e:
+        yield _anthropic_sse_error(str(e))
+        return
+
+    if not _has_web_search(events, injected=injected):
         async for chunk in translate_anthropic_stream(_list_to_stream(events), model):
             yield chunk
         return
@@ -99,9 +105,12 @@ async def _nonstream_with_web_search(
 
     config = get_config()
 
+    injected = cc_body.get("params", {}).pop("_adapter_web_search", False)
+
     events = await _events_to_list(client.generate(cc_body, cc_headers))
 
-    if not _has_web_search(events):
+    injected = cc_body.get("params", {}).get("_adapter_web_search", False)
+    if not _has_web_search(events, injected=injected):
 
         async def _s():
             for e in events:
