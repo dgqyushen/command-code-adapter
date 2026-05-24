@@ -46,17 +46,12 @@ async def _stream_with_web_search(
         _build_second_cc_body,
         _events_to_list,
         _list_to_stream,
-        translate_anthropic_stream,
     )
     from cc_adapter.providers.shared.web_search import execute_search, format_search_results
-    from cc_adapter.core.runtime import get_config
 
     config = get_config()
 
-    try:
-        events = await _events_to_list(client.generate(cc_body, cc_headers))
-    except Exception:
-        raise
+    events = await _events_to_list(client.generate(cc_body, cc_headers))
 
     if not _has_web_search(events):
         async for chunk in translate_anthropic_stream(_list_to_stream(events), model):
@@ -64,19 +59,26 @@ async def _stream_with_web_search(
         return
 
     web_search_calls = _extract_web_search_calls(events)
-    search_results = []
-    for tc in web_search_calls:
-        query = tc.get("input", {}).get("query", "")
-        if query:
-            results = await execute_search(query, config)
-            search_results.append(format_search_results(results))
-        else:
-            search_results.append("Error: empty search query")
+    import asyncio
+
+    async def _run_one_search(query):
+        if not query:
+            return "Error: empty search query"
+        results = await execute_search(query, config)
+        return format_search_results(results)
+
+    queries = [tc.get("input", {}).get("query", "") for tc in web_search_calls]
+    search_results = await asyncio.gather(*[_run_one_search(q) for q in queries])
 
     second_body = _build_second_cc_body(cc_body, web_search_calls, search_results)
-    second_stream = client.generate(second_body, cc_headers)
 
-    async for chunk in translate_anthropic_stream(second_stream, model):
+    async for chunk in stream_with_retry(
+        lambda sc=second_body, sh=cc_headers: client.generate(sc, sh),
+        lambda stream: translate_anthropic_stream(stream, model),
+        logger,
+        "anthropic.websearch.stream",
+        error_fn=lambda msg: format_sse("error", {"type": "error", "error": {"type": "api_error", "message": msg}}),
+    ):
         yield chunk
 
 
@@ -94,7 +96,6 @@ async def _nonstream_with_web_search(
         collect_and_translate_anthropic_nonstream,
     )
     from cc_adapter.providers.shared.web_search import execute_search, format_search_results
-    from cc_adapter.core.runtime import get_config
 
     config = get_config()
 
@@ -109,19 +110,25 @@ async def _nonstream_with_web_search(
         return await collect_and_translate_anthropic_nonstream(_s(), model)
 
     web_search_calls = _extract_web_search_calls(events)
-    search_results = []
-    for tc in web_search_calls:
-        query = tc.get("input", {}).get("query", "")
-        if query:
-            results = await execute_search(query, config)
-            search_results.append(format_search_results(results))
-        else:
-            search_results.append("Error: empty search query")
+    import asyncio
+
+    async def _run_one_search(query):
+        if not query:
+            return "Error: empty search query"
+        results = await execute_search(query, config)
+        return format_search_results(results)
+
+    queries = [tc.get("input", {}).get("query", "") for tc in web_search_calls]
+    search_results = await asyncio.gather(*[_run_one_search(q) for q in queries])
 
     second_body = _build_second_cc_body(cc_body, web_search_calls, search_results)
-    second_stream = client.generate(second_body, cc_headers)
 
-    return await collect_and_translate_anthropic_nonstream(second_stream, model)
+    return await retry_on_empty(
+        lambda sc=second_body, sh=cc_headers: client.generate(sc, sh),
+        lambda stream: collect_and_translate_anthropic_nonstream(stream, model),
+        logger,
+        "anthropic.websearch.nonstream",
+    )
 
 
 @router.post("/v1/messages")
@@ -143,7 +150,6 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
     current_client = _get_client()
 
     from cc_adapter.providers.shared.web_search import is_web_search_enabled
-    from cc_adapter.core.runtime import get_config
 
     config = get_config()
     web_search_enabled = is_web_search_enabled(config)
