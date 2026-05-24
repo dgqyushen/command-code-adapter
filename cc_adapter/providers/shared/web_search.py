@@ -41,7 +41,7 @@ def inject_web_search_tool(tools: list[dict]) -> list[dict]:
 
 
 async def execute_search(query: str, config) -> list[dict]:
-    provider = config.web_search_provider
+    provider = config.web_search_provider.strip().lower()
     if provider == "deepseek":
         return await _search_deepseek(query, config.deepseek_api_key)
     if provider == "brave":
@@ -56,11 +56,11 @@ def format_search_results(results: list[dict], max_results: int = 10, max_snippe
         return "No search results found."
     lines = []
     for i, r in enumerate(results[:max_results], 1):
-        title = r.get("title", "Untitled")
-        url = r.get("url", "")
-        snippet = r.get("snippet", "")
+        title = r.get("title") or "Untitled"
+        url = r.get("url") or ""
+        snippet = r.get("snippet") or ""
         if len(snippet) > max_snippet_length:
-            snippet = snippet[:max_snippet_length] + "..."
+            snippet = snippet[: max_snippet_length - 3] + "..."
         lines.append(f"{i}. {title}")
         if url:
             lines.append(f"   URL: {url}")

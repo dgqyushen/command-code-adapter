@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from cc_adapter.providers.shared.web_search import (
     WEB_SEARCH_TOOL_DEFINITION,
+    format_search_results,
     inject_web_search_tool,
     is_web_search_enabled,
 )
@@ -84,6 +85,63 @@ class TestInjectWebSearchTool:
         tools = [{"name": "other_tool", "input_schema": {}}]
         result = inject_web_search_tool(tools)
         assert result is not tools
+
+
+class TestFormatSearchResults:
+    def test_empty_results(self):
+        assert format_search_results([]) == "No search results found."
+
+    def test_single_result(self):
+        results = [{"title": "Foo", "url": "https://foo.com", "snippet": "foo bar"}]
+        out = format_search_results(results)
+        assert "1. Foo" in out
+        assert "URL: https://foo.com" in out
+        assert "foo bar" in out
+
+    def test_max_results_limits_output(self):
+        results = [{"title": f"R{i}", "url": "", "snippet": ""} for i in range(20)]
+        out = format_search_results(results, max_results=3)
+        assert "1. R0" in out
+        assert "3. R2" in out
+        assert "4." not in out
+
+    def test_missing_title_defaults_to_untitled(self):
+        results = [{"url": "https://x.com"}]
+        out = format_search_results(results)
+        assert "Untitled" in out
+
+    def test_none_title_handled(self):
+        results = [{"title": None, "url": "https://x.com"}]
+        out = format_search_results(results)
+        assert "Untitled" in out
+
+    def test_none_url_handled(self):
+        results = [{"title": "Foo", "url": None, "snippet": "bar"}]
+        out = format_search_results(results)
+        assert "URL:" not in out
+
+    def test_none_snippet_handled(self):
+        results = [{"title": "Foo", "url": "", "snippet": None}]
+        out = format_search_results(results)
+        # Should not raise TypeError on len(None)
+        assert "Foo" in out
+
+    def test_truncation_exact_length(self):
+        snippet = "x" * 600
+        results = [{"title": "T", "url": "", "snippet": snippet}]
+        out = format_search_results(results)
+        assert "..." in out
+        # Snippet portion should be exactly 500 chars (not 503)
+        line = [l for l in out.split("\n") if "x" in l or "..." in l][0]
+        stripped = line.strip()
+        assert len(stripped) == 500
+        assert stripped.endswith("...")
+
+    def test_short_snippet_not_truncated(self):
+        snippet = "x" * 100
+        results = [{"title": "T", "url": "", "snippet": snippet}]
+        out = format_search_results(results)
+        assert "..." not in out
 
 
 class TestWebSearchToolDefinition:
