@@ -329,3 +329,44 @@ async def test_router_stream_web_search_disabled_uses_original_flow(monkeypatch)
             )
 
         assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_router_stream_with_web_search(monkeypatch):
+    cfg = AppConfig(
+        cc_api_key="test-key",
+        web_search_provider="deepseek",
+        deepseek_api_key="sk-test",
+    )
+    monkeypatch.setattr(runtime, "_config", cfg)
+    monkeypatch.setattr(runtime, "_cc_client", None)
+
+    async def mock_execute_search(query, config):
+        return [{"title": "Result", "url": "", "snippet": "found"}]
+    monkeypatch.setattr("cc_adapter.providers.shared.web_search.execute_search", mock_execute_search)
+
+    async with respx.mock(base_url="https://api.commandcode.ai", assert_all_called=False) as respx_mock:
+        respx_mock.post("/alpha/generate").mock(
+            side_effect=[
+                HttpxResponse(200, text=WEB_SEARCH_STREAM_EVENTS),
+                HttpxResponse(200, text=SECOND_STREAM_EVENTS),
+            ]
+        )
+        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
+            return_value=HttpxResponse(200, json={"version": "0.25.2"})
+        )
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/v1/messages",
+                json={
+                    "model": "claude-sonnet-4-6",
+                    "max_tokens": 100,
+                    "messages": [{"role": "user", "content": "search for AI news"}],
+                    "stream": True,
+                },
+            )
+
+        assert resp.status_code == 200
+        assert "Here are the results" in resp.text
