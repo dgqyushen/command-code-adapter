@@ -25,6 +25,11 @@ class AppConfig(BaseSettings):
     http_max_keepalive_connections: int = 50
     http2: bool = False
 
+    web_search_provider: str = ""
+    deepseek_api_key: str = ""
+    brave_api_key: str = ""
+    tavily_api_key: str = ""
+
     @field_validator("cc_api_key", mode="before")
     @classmethod
     def coerce_api_key(cls, v):
