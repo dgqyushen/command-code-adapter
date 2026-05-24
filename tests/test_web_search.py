@@ -1,7 +1,5 @@
 import copy
-import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
 import respx
@@ -197,7 +195,7 @@ class TestWebSearchResponseHelpers:
         ]
         calls = _extract_web_search_calls(events)
         assert len(calls) == 2
-        assert calls[0]["toolCallId"] == "c1"
+        assert [c["toolCallId"] for c in calls] == ["c1", "c2"]
 
     def test_build_second_cc_body_appends_messages(self):
         original_body = {
@@ -300,6 +298,8 @@ async def test_router_stream_no_web_search_passes_through(monkeypatch):
 
         assert resp.status_code == 200
         assert "Hello" in resp.text
+        cc_calls = [c for c in respx_mock.calls if "/alpha/generate" in str(c.request.url)]
+        assert len(cc_calls) == 1
 
 
 @pytest.mark.asyncio
@@ -329,10 +329,14 @@ async def test_router_stream_web_search_disabled_uses_original_flow(monkeypatch)
             )
 
         assert resp.status_code == 200
+        cc_calls = [c for c in respx_mock.calls if "/alpha/generate" in str(c.request.url)]
+        assert len(cc_calls) == 1
 
 
 @pytest.mark.asyncio
 async def test_router_stream_with_web_search(monkeypatch):
+    from unittest.mock import AsyncMock
+
     cfg = AppConfig(
         cc_api_key="test-key",
         web_search_provider="deepseek",
@@ -341,9 +345,8 @@ async def test_router_stream_with_web_search(monkeypatch):
     monkeypatch.setattr(runtime, "_config", cfg)
     monkeypatch.setattr(runtime, "_cc_client", None)
 
-    async def mock_execute_search(query, config):
-        return [{"title": "Result", "url": "", "snippet": "found"}]
-    monkeypatch.setattr("cc_adapter.providers.shared.web_search.execute_search", mock_execute_search)
+    mock_exec = AsyncMock(return_value=[{"title": "AI News", "url": "https://example.com", "snippet": "Latest AI"}])
+    monkeypatch.setattr("cc_adapter.providers.shared.web_search.execute_search", mock_exec)
 
     async with respx.mock(base_url="https://api.commandcode.ai", assert_all_called=False) as respx_mock:
         respx_mock.post("/alpha/generate").mock(
@@ -363,10 +366,14 @@ async def test_router_stream_with_web_search(monkeypatch):
                 json={
                     "model": "claude-sonnet-4-6",
                     "max_tokens": 100,
-                    "messages": [{"role": "user", "content": "search for AI news"}],
+                    "messages": [{"role": "user", "content": "search for latest AI news"}],
                     "stream": True,
                 },
             )
 
         assert resp.status_code == 200
         assert "Here are the results" in resp.text
+
+        mock_exec.assert_awaited_once()
+        cc_calls = [c for c in respx_mock.calls if "/alpha/generate" in str(c.request.url)]
+        assert len(cc_calls) == 2
