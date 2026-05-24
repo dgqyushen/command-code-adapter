@@ -68,14 +68,14 @@ def _build_second_cc_body(original_body: dict, web_search_calls: list[dict], sea
     return body
 
 
-async def _events_to_list(stream):
+async def _events_to_list(stream) -> list[dict]:
     events = []
     async for event in stream:
         events.append(event)
     return events
 
 
-async def _list_to_stream(items):
+async def _list_to_stream(items) -> AsyncGenerator[dict, None]:
     for item in items:
         yield item
 
