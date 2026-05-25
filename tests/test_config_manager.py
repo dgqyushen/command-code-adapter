@@ -103,6 +103,7 @@ class TestFieldMap:
             "log_level",
             "log_format",
             "default_model",
+            "zdr",
         ]:
             assert field in FIELD_MAP
 

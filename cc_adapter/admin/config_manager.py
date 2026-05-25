@@ -22,6 +22,7 @@ FIELD_MAP = {
     "log_level": "CC_ADAPTER_LOG_LEVEL",
     "log_format": "CC_ADAPTER_LOG_FORMAT",
     "default_model": "CC_ADAPTER_DEFAULT_MODEL",
+    "zdr": "CC_ADAPTER_ZDR",
 }
 
 logger = structlog.get_logger(__name__)
