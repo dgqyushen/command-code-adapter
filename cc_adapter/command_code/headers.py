@@ -14,4 +14,11 @@ def make_cc_headers(api_key: str | None = None) -> dict[str, str]:
     }
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+
+    from cc_adapter.core.runtime import get_config
+
+    config = get_config()
+    if config is None or config.zdr:
+        headers["x-cmd-zdr"] = "1"
+
     return headers
