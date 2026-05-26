@@ -110,8 +110,8 @@ async def test_disabled_still_goes_to_cc():
             return_value=HttpxResponse(
                 200,
                 text=(
-                    "data: {\"type\":\"text-delta\",\"text\":\"Hello\"}\n\n"
-                    "data: {\"type\":\"finish\",\"finishReason\":\"end_turn\",\"totalUsage\":{\"inputTokens\":10,\"outputTokens\":5}}\n\n"
+                    'data: {"type":"text-delta","text":"Hello"}\n\n'
+                    'data: {"type":"finish","finishReason":"end_turn","totalUsage":{"inputTokens":10,"outputTokens":5}}\n\n'
                 ),
             )
         )
