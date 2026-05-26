@@ -29,38 +29,24 @@ async def test_retry_on_empty_first_attempt_succeeds():
 
 
 @pytest.mark.asyncio
-async def test_retry_on_empty_retries_once():
+async def test_retry_on_empty_no_retry():
     call_count = 0
 
     async def fake_translate(stream):
         nonlocal call_count
         call_count += 1
-        if call_count == 1:
-            raise AdapterError(message="Upstream model returned an empty response", status_code=502)
-        return "retried"
-
-    result = await retry_on_empty(
-        lambda: _gen_single("ignored"),
-        fake_translate,
-        MagicMock(),
-        "test",
-    )
-    assert result == "retried"
-    assert call_count == 2
-
-
-@pytest.mark.asyncio
-async def test_retry_on_empty_fails_twice():
-    async def translate(stream):
         raise AdapterError(message="Upstream model returned an empty response", status_code=502)
 
-    with pytest.raises(AdapterError):
+    with pytest.raises(AdapterError) as exc:
         await retry_on_empty(
             lambda: _gen_single("ignored"),
-            translate,
+            fake_translate,
             MagicMock(),
             "test",
         )
+    assert exc.value.status_code == 502
+    assert exc.value.message == "Upstream model returned an empty response"
+    assert call_count == 1
 
 
 @pytest.mark.asyncio

@@ -300,14 +300,10 @@ async def test_stream_error_event(client):
 
 
 @pytest.mark.asyncio
-async def test_empty_then_retry_succeeds(client):
+async def test_empty_returns_error(client):
     _setup(
         events=[
             {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}},
-        ],
-        events_second=[
-            {"type": "text-delta", "text": "Hello after retry"},
-            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
         ],
     )
     payload = {"model": "deepseek-v4-flash", "input": "hi", "stream": True}
@@ -315,7 +311,8 @@ async def test_empty_then_retry_succeeds(client):
         resp = await c.post("/v1/responses", json=payload)
     assert resp.status_code == 200
     events = _parse_sse(resp.text)
-    assert any(e["type"] == "response.output_text.delta" and e["delta"] == "Hello after retry" for e in events)
+    assert len(events) >= 1
+    assert events[0]["type"] == "error"
 
 
 @pytest.mark.asyncio

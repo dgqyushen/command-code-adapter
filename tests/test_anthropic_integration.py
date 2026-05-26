@@ -519,15 +519,11 @@ async def test_nonstream_access_key_auth(client):
 
 
 @pytest.mark.asyncio
-async def test_stream_empty_then_retry_succeeds(client):
+async def test_stream_empty_returns_error(client):
     _setup(
         cfg_overrides={"web_search_provider": ""},
         events=[
             {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}},
-        ],
-        events_second=[
-            {"type": "text-delta", "text": "Hello"},
-            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
         ],
     )
     payload = {
@@ -538,10 +534,8 @@ async def test_stream_empty_then_retry_succeeds(client):
     }
     async with client as c:
         resp = await c.post("/v1/messages", json=payload)
-    assert resp.status_code == 200
     events = _parse_sse(resp.text)
-    assert events[0]["event"] == "message_start"
-    assert any(e["event"] == "content_block_delta" and e["data"]["delta"].get("text") == "Hello" for e in events)
+    assert any(e["event"] == "error" for e in events)
 
 
 @pytest.mark.asyncio
@@ -570,17 +564,12 @@ async def test_stream_empty_both_attempts_returns_error(client):
 
 
 @pytest.mark.asyncio
-async def test_stream_empty_text_delta_skipped_retry_succeeds(client):
-    """text-delta with empty text must not emit chunks, so retry works."""
+async def test_stream_empty_text_delta_returns_error(client):
     _setup(
         cfg_overrides={"web_search_provider": ""},
         events=[
             {"type": "text-delta", "text": ""},
             {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 0, "outputTokens": 0}},
-        ],
-        events_second=[
-            {"type": "text-delta", "text": "Hello"},
-            {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 5}},
         ],
     )
     payload = {
@@ -591,10 +580,8 @@ async def test_stream_empty_text_delta_skipped_retry_succeeds(client):
     }
     async with client as c:
         resp = await c.post("/v1/messages", json=payload)
-    assert resp.status_code == 200
     events = _parse_sse(resp.text)
-    assert events[0]["event"] == "message_start"
-    assert any(e["event"] == "content_block_delta" and e["data"]["delta"].get("text") == "Hello" for e in events)
+    assert any(e["event"] == "error" for e in events)
 
 
 @pytest.mark.asyncio

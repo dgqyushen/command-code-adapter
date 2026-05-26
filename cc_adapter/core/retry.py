@@ -15,15 +15,8 @@ async def retry_on_empty(
     logger: structlog.stdlib.BoundLogger,
     label: str = "",
 ) -> T:
-    for attempt in range(2):
-        cc_stream = generate_fn()
-        try:
-            return await translate_fn(cc_stream)
-        except AdapterError as e:
-            if attempt == 0 and "empty response" in e.message.lower():
-                logger.warning("%s: Empty upstream response (attempt 1/2), retrying...", label)
-                continue
-            raise
+    cc_stream = generate_fn()
+    return await translate_fn(cc_stream)
 
 
 async def stream_with_retry(
@@ -34,71 +27,81 @@ async def stream_with_retry(
     error_fn: Callable[[str], str] | None = None,
     buffer_detector: _BufferDetector | None = None,
 ) -> AsyncGenerator[str, None]:
-    for attempt in range(2):
-        cc_stream = generate_fn()
-        translator = translate_fn(cc_stream)
-        yielded_any = False
-        should_retry = False
+    if buffer_detector:
+        for attempt in range(2):
+            cc_stream = generate_fn()
+            translator = translate_fn(cc_stream)
+            yielded_any = False
+            should_retry = False
 
-        try:
-            if buffer_detector and attempt == 0:
-                async for chunk in translator:
-                    buffer_detector.feed(chunk)
-                    if buffer_detector.after_flush:
+            try:
+                if attempt == 0:
+                    async for chunk in translator:
+                        buffer_detector.feed(chunk)
+                        if buffer_detector.after_flush:
+                            data = buffer_detector._chunk_payload(chunk)
+                            if not buffer_detector._visible_seen and buffer_detector._is_empty_error(data):
+                                should_retry = True
+                                await translator.aclose()
+                                break
+                            yield chunk
+                            yielded_any = True
+                            continue
+
+                        if buffer_detector.should_flush():
+                            for c in buffer_detector.drain():
+                                yield c
+                                yielded_any = True
+                            buffer_detector.after_flush = True
+                            continue
+
                         data = buffer_detector._chunk_payload(chunk)
-                        if not buffer_detector._visible_seen and buffer_detector._is_empty_error(data):
+                        if buffer_detector._is_empty_error(data):
+                            for c in buffer_detector.retry_chunks():
+                                yield c
+                                yielded_any = True
                             should_retry = True
                             await translator.aclose()
                             break
-                        yield chunk
-                        yielded_any = True
-                        continue
-
-                    if buffer_detector.should_flush():
-                        for c in buffer_detector.drain():
-                            yield c
-                            yielded_any = True
-                        yielded_any = True
-                        buffer_detector.after_flush = True
-                        continue
-
-                    data = buffer_detector._chunk_payload(chunk)
-                    if buffer_detector._is_empty_error(data):
-                        for c in buffer_detector.retry_chunks():
-                            yield c
-                            yielded_any = True
-                        should_retry = True
-                        await translator.aclose()
-                        break
-                else:
-                    if buffer_detector.should_retry():
-                        should_retry = True
-                        for c in buffer_detector.retry_chunks():
-                            yield c
-                            yielded_any = True
                     else:
-                        for c in buffer_detector.drain():
-                            yield c
-                            yielded_any = True
-                    await translator.aclose()
-            else:
-                async for chunk in translator:
-                    yielded_any = True
-                    yield chunk
+                        if buffer_detector.should_retry():
+                            should_retry = True
+                            for c in buffer_detector.retry_chunks():
+                                yield c
+                                yielded_any = True
+                        else:
+                            for c in buffer_detector.drain():
+                                yield c
+                                yielded_any = True
+                        await translator.aclose()
+                else:
+                    async for chunk in translator:
+                        yielded_any = True
+                        yield chunk
+            except AdapterError as e:
+                if not yielded_any and attempt == 0 and "empty response" in e.message.lower():
+                    should_retry = True
+                elif error_fn:
+                    yield error_fn(e.message)
+                    return
+                else:
+                    return
+
+            if should_retry:
+                logger.warning("%s: Empty upstream response (attempt %d/2), retrying...", label, attempt + 1)
+                continue
+
+            return
+    else:
+        cc_stream = generate_fn()
+        translator = translate_fn(cc_stream)
+        try:
+            async for chunk in translator:
+                yield chunk
         except AdapterError as e:
-            if not yielded_any and attempt == 0 and "empty response" in e.message.lower():
-                should_retry = True
-            elif error_fn:
+            if error_fn:
                 yield error_fn(e.message)
-                return
-            else:
-                return
-
-        if should_retry:
-            logger.warning("%s: Empty upstream response (attempt %d/2), retrying...", label, attempt + 1)
-            continue
-
-        return
+            return
 
 
 class _BufferDetector:
