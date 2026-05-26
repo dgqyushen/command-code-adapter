@@ -25,6 +25,20 @@ def is_web_search_enabled(config: Any) -> bool:
     return False
 
 
+def has_anthropic_web_search_tool(tools: Any) -> bool:
+    if not tools:
+        return False
+    for tool in tools:
+        name = getattr(tool, "name", None)
+        tool_type = getattr(tool, "type", None)
+        if isinstance(tool, dict):
+            name = tool.get("name")
+            tool_type = tool.get("type")
+        if name == "web_search" and isinstance(tool_type, str) and tool_type.startswith("web_search"):
+            return True
+    return False
+
+
 def inject_web_search_tool(tools: list[dict]) -> list[dict]:
     if any(t.get("name") == "web_search" for t in tools):
         return tools

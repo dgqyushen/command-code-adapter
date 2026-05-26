@@ -166,11 +166,11 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
         tools="yes" if req.tools else "no",
     )
 
-    from cc_adapter.providers.shared.web_search import is_web_search_enabled
+    from cc_adapter.providers.shared.web_search import has_anthropic_web_search_tool, is_web_search_enabled
 
     config = get_config()
 
-    if is_web_search_enabled(config):
+    if is_web_search_enabled(config) and has_anthropic_web_search_tool(req.tools):
         logger.info("anthropic.web_search.forward", model=req.model)
         try:
             if req.stream:

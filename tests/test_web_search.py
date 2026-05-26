@@ -4,6 +4,7 @@ import pytest
 
 from cc_adapter.providers.shared.web_search import (
     WEB_SEARCH_TOOL_DEFINITION,
+    has_anthropic_web_search_tool,
     inject_web_search_tool,
     is_web_search_enabled,
 )
@@ -73,3 +74,20 @@ class TestWebSearchToolDefinition:
         assert WEB_SEARCH_TOOL_DEFINITION["input_schema"]["type"] == "object"
         assert "query" in WEB_SEARCH_TOOL_DEFINITION["input_schema"]["properties"]
         assert "query" in WEB_SEARCH_TOOL_DEFINITION["input_schema"]["required"]
+
+
+class TestHasAnthropicWebSearchTool:
+    def test_detects_server_tool_dict(self):
+        tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}]
+        assert has_anthropic_web_search_tool(tools) is True
+
+    def test_ignores_function_tool_named_web_search(self):
+        tools = [{"name": "web_search", "input_schema": {"type": "object"}}]
+        assert has_anthropic_web_search_tool(tools) is False
+
+    def test_ignores_other_server_tools(self):
+        tools = [{"type": "code_execution_20250522", "name": "code_execution"}]
+        assert has_anthropic_web_search_tool(tools) is False
+
+    def test_false_for_empty_tools(self):
+        assert has_anthropic_web_search_tool([]) is False

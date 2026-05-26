@@ -35,7 +35,7 @@ DEEPSEEK_SSE_RESPONSE = (
 
 
 @pytest.mark.asyncio
-async def test_stream_forwards_to_deepseek():
+async def test_stream_uses_cc_when_deepseek_enabled_without_web_search_tool():
     cfg = AppConfig(cc_api_key="test-key", web_search_provider="deepseek", deepseek_api_key="sk-test")
     runtime._config = cfg
     runtime._cc_client = None
@@ -43,6 +43,18 @@ async def test_stream_forwards_to_deepseek():
     async with respx.mock(assert_all_called=False) as respx_mock:
         deepseek_route = respx_mock.post("https://api.deepseek.com/anthropic/v1/messages").mock(
             return_value=HttpxResponse(200, content=DEEPSEEK_SSE_RESPONSE)
+        )
+        cc_route = respx_mock.post("https://api.commandcode.ai/alpha/generate").mock(
+            return_value=HttpxResponse(
+                200,
+                text=(
+                    'data: {"type":"text-delta","text":"Hello from CC"}\n\n'
+                    'data: {"type":"finish","finishReason":"end_turn","totalUsage":{"inputTokens":10,"outputTokens":5}}\n\n'
+                ),
+            )
+        )
+        respx_mock.get("https://registry.npmjs.org/command-code/latest").mock(
+            return_value=HttpxResponse(200, json={"version": "0.25.2"})
         )
 
         transport = ASGITransport(app=app)
@@ -58,8 +70,9 @@ async def test_stream_forwards_to_deepseek():
             )
 
     assert resp.status_code == 200
-    assert "Hello from DeepSeek" in resp.text
-    assert deepseek_route.called
+    assert "Hello from CC" in resp.text
+    assert cc_route.called
+    assert not deepseek_route.called
 
 
 @pytest.mark.asyncio
@@ -83,6 +96,7 @@ async def test_stream_forward_does_not_write_passthrough_log_file(tmp_path, monk
                     "max_tokens": 100,
                     "messages": [{"role": "user", "content": "hello"}],
                     "stream": True,
+                    "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}],
                 },
             )
 
@@ -152,6 +166,7 @@ async def test_stream_uses_configured_web_search_model_for_deepseek():
                     "max_tokens": 100,
                     "messages": [{"role": "user", "content": "search the web"}],
                     "stream": True,
+                    "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}],
                 },
             )
 
@@ -191,6 +206,7 @@ async def test_nonstream_forwards_to_deepseek():
                     "max_tokens": 100,
                     "messages": [{"role": "user", "content": "hello"}],
                     "stream": False,
+                    "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}],
                 },
             )
 
@@ -284,6 +300,7 @@ async def test_deepseek_error_returns_error_in_stream():
                     "max_tokens": 100,
                     "messages": [{"role": "user", "content": "hello"}],
                     "stream": True,
+                    "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}],
                 },
             )
 
