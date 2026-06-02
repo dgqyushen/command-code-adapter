@@ -16,6 +16,8 @@ docker compose up -d                  # docker-compose.yml + optional docker-com
 
 **Version**: `pyproject.toml` `[tool.poetry].version` is the single source of truth. `core/constants.py` reads it at import via `_load_version()`. Both `main.py` and `admin/router.py` import `VERSION` from constants. Bump in pyproject.toml when releasing — do not edit constants.py.
 
+**After each feature/fix**: bump the version in `pyproject.toml` before committing. Push a `v*` tag (e.g. `v0.7.2`) to trigger the Docker CI workflow, which pushes `latest` + semver tags to Docker Hub.
+
 ## Routes
 
 | Path | Handler | Auth |
