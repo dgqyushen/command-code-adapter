@@ -7,6 +7,7 @@ from typing import AsyncGenerator, Any
 import httpx
 
 from cc_adapter.core.errors import map_upstream_error, AuthenticationError, TimeoutError_, UpstreamError
+from cc_adapter.core.utils import generate_id
 from cc_adapter.command_code.headers import make_cc_headers
 
 logger = structlog.get_logger(__name__)
@@ -67,6 +68,8 @@ class CommandCodeClient:
         self._max_keepalive_connections = max_keepalive_connections
         self._http2 = _make_http2_safe(http2)
 
+        self._session_id = generate_id("sess_", 16)
+
         if api_keys and len(api_keys) > 1:
             from cc_adapter.core.key_pool import KeyPool
 
@@ -114,6 +117,7 @@ class CommandCodeClient:
             tried_keys.add(key)
 
             headers = make_cc_headers(key)
+            headers["x-session-id"] = self._session_id
             headers.update(extra_headers or {})
 
             url = f"{self.base_url}/alpha/generate"

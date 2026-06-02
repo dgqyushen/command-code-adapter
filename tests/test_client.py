@@ -100,3 +100,34 @@ async def test_client_aclose_does_not_close_injected_client():
     client = CommandCodeClient(base_url="https://api.commandcode.ai", api_key="test", http_client=injected)
     await client.aclose()
     assert not injected.is_closed
+
+
+def test_client_generates_stable_session_id():
+    """Session ID is stable per client instance, matches sess_<16hex> format."""
+    client = CommandCodeClient(base_url="https://api.commandcode.ai", api_key="test")
+    sid = client._session_id
+    assert sid.startswith("sess_")
+    assert len(sid) == len("sess_") + 16
+    assert client._session_id == sid  # idempotent, no regeneration
+
+
+@pytest.mark.asyncio
+async def test_generate_injects_session_id_in_headers():
+    """generate() adds x-session-id header from client._session_id."""
+    from unittest.mock import patch, AsyncMock
+
+    async def fake_lines():
+        yield '{"type":"finish","finishReason":"end_turn"}'
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__.return_value = mock_ctx
+    mock_ctx.is_error = False
+    mock_ctx.status_code = 200
+    mock_ctx.aiter_lines = fake_lines
+
+    with patch.object(httpx.AsyncClient, "stream", return_value=mock_ctx) as mock_stream:
+        client = CommandCodeClient(base_url="https://api.commandcode.ai", api_key="test")
+        async for _ in client.generate({"params": {"model": "test", "messages": []}}):
+            pass
+        _, kwargs = mock_stream.call_args
+        assert kwargs["headers"]["x-session-id"] == client._session_id

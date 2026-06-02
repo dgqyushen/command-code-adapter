@@ -13,8 +13,6 @@ class TestMakeCcHeaders:
         assert headers["x-co-flag"] == "false"
         assert headers["x-taste-learning"] == "false"
         assert "Authorization" not in headers
-        assert headers["x-session-id"].startswith("sess_")
-        assert len(headers["x-session-id"]) == 21
 
     def test_with_api_key(self):
         headers = make_cc_headers("sk-test")

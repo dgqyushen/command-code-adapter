@@ -11,7 +11,6 @@ def _make_traceparent() -> str:
 
 def make_cc_headers(api_key: str | None = None) -> dict[str, str]:
     from cc_adapter.core.runtime import get_version_checker
-    from cc_adapter.core.utils import generate_id
 
     headers = {
         "Content-Type": "application/json",
@@ -21,7 +20,6 @@ def make_cc_headers(api_key: str | None = None) -> dict[str, str]:
         "x-co-flag": "false",
         "x-taste-learning": "false",
         "traceparent": _make_traceparent(),
-        "x-session-id": generate_id("sess_", 16),
     }
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
