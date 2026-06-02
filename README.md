@@ -54,6 +54,7 @@ docker compose up -d
 | `CC_ADAPTER_HTTP_MAX_KEEPALIVE_CONNECTIONS` | `50` | HTTP 连接池最大 Keepalive 连接数 |
 | `CC_ADAPTER_HTTP2` | `false` | 启用 HTTP/2 |
 | `CC_ADAPTER_ZDR` | `true` | 发送 `x-cmd-zdr: 1` 请求头（零数据留存） |
+| `CC_ADAPTER_OSS_PRIMARY_PROVIDER` | — | 可选的 OSS 提供商名称，作为 `x-oss-primary-provider` 请求头发送 |
 | `CC_ADAPTER_WEB_SEARCH_PROVIDER` | — | 设为 `deepseek` 时，将 Anthropic `web_search` 请求转发到 DeepSeek |
 | `CC_ADAPTER_DEEPSEEK_API_KEY` | — | DeepSeek API Key，用于 `web_search` 转发 |
 | `CC_ADAPTER_DEEPSEEK_ANTHROPIC_URL` | `https://api.deepseek.com/anthropic` | DeepSeek Anthropic 兼容端点 |
@@ -251,6 +252,7 @@ docker compose up -d
 | `CC_ADAPTER_HTTP_MAX_KEEPALIVE_CONNECTIONS` | `50` | HTTP connection pool max keepalive connections |
 | `CC_ADAPTER_HTTP2` | `false` | Enable HTTP/2 |
 | `CC_ADAPTER_ZDR` | `true` | Send `x-cmd-zdr: 1` header (zero data retention) |
+| `CC_ADAPTER_OSS_PRIMARY_PROVIDER` | — | Optional OSS provider name, sent as `x-oss-primary-provider` header |
 | `CC_ADAPTER_WEB_SEARCH_PROVIDER` | — | Set to `deepseek` to forward Anthropic `web_search` requests to DeepSeek |
 | `CC_ADAPTER_DEEPSEEK_API_KEY` | — | DeepSeek API key used for `web_search` forwarding |
 | `CC_ADAPTER_DEEPSEEK_ANTHROPIC_URL` | `https://api.deepseek.com/anthropic` | DeepSeek Anthropic-compatible endpoint |
