@@ -27,6 +27,8 @@ class AppConfig(BaseSettings):
 
     zdr: bool = True
 
+    oss_primary_provider: str = ""
+
     web_search_provider: str = ""
     deepseek_api_key: str = ""
     deepseek_anthropic_url: str = "https://api.deepseek.com/anthropic"
