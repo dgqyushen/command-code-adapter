@@ -36,6 +36,21 @@ def _parse_sse_line(raw: str) -> dict[str, Any] | None:
     return parsed
 
 
+_INSUFFICIENT_CREDITS_PHRASES = (
+    "insufficient credits",
+    "insufficient_credits",
+)
+
+
+def _is_retryable_error(status_code: int, body_text: str) -> bool:
+    if status_code in (402, 429):
+        return True
+    if status_code == 400:
+        lowered = body_text.lower()
+        return any(phrase in lowered for phrase in _INSUFFICIENT_CREDITS_PHRASES)
+    return False
+
+
 def _make_http2_safe(http2: bool) -> bool:
     if not http2:
         return False
@@ -131,7 +146,7 @@ class CommandCodeClient:
                         logger.warning("upstream.error", status_code=response.status_code, error_type="cc_api_error")
                         mapped = map_upstream_error(response.status_code, text)
 
-                        if response.status_code in (402, 429):
+                        if _is_retryable_error(response.status_code, text):
                             last_error = mapped
                             continue
 

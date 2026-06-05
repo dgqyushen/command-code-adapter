@@ -8,15 +8,32 @@ from cc_adapter.core.key_pool import KeyPool
 
 class TestKeyPoolSelectKey:
     @pytest.mark.asyncio
-    async def test_select_key_returns_first_key_when_no_credits_cached(self):
+    async def test_select_key_fetches_credits_on_first_call(self):
         pool = KeyPool(keys=["key1", "key2", "key3"], base_url="https://api.example.com")
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "credits": {"monthlyCredits": 0, "purchasedCredits": 0, "freeCredits": 0}
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value.get.return_value = mock_response
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            key = await pool.select_key()
+        assert key == "key1"
+
+    @pytest.mark.asyncio
+    async def test_select_key_falls_back_on_refresh_failure(self):
+        pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
+        pool._refresh = AsyncMock(side_effect=RuntimeError("network down"))
         key = await pool.select_key()
         assert key == "key1"
+        assert pool._last_fetch is None
 
     @pytest.mark.asyncio
     async def test_select_key_skips_zero_credit_keys(self):
         pool = KeyPool(keys=["key1", "key2", "key3"], base_url="https://api.example.com")
         pool._credits = {"key1": 0, "key2": 100, "key3": 50}
+        pool._last_fetch = time.monotonic()
         key = await pool.select_key()
         assert key == "key2"
 
@@ -24,6 +41,7 @@ class TestKeyPoolSelectKey:
     async def test_select_key_skips_excluded_keys(self):
         pool = KeyPool(keys=["key1", "key2", "key3"], base_url="https://api.example.com")
         pool._credits = {"key1": 100, "key2": 200, "key3": 300}
+        pool._last_fetch = time.monotonic()
         key = await pool.select_key(exclude={"key1"})
         assert key == "key2"
 
@@ -31,12 +49,14 @@ class TestKeyPoolSelectKey:
     async def test_select_key_falls_back_to_first_when_all_exhausted(self):
         pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
         pool._credits = {"key1": 0, "key2": 0}
+        pool._last_fetch = time.monotonic()
         key = await pool.select_key()
         assert key == "key1"
 
     @pytest.mark.asyncio
     async def test_select_key_returns_none_when_no_keys(self):
         pool = KeyPool(keys=[], base_url="https://api.example.com")
+        pool._last_fetch = time.monotonic()
         key = await pool.select_key()
         assert key is None
 
@@ -44,6 +64,7 @@ class TestKeyPoolSelectKey:
     async def test_select_key_respects_precedence_order(self):
         pool = KeyPool(keys=["keyA", "keyB", "keyC"], base_url="https://api.example.com")
         pool._credits = {"keyA": 0, "keyB": 999, "keyC": 999}
+        pool._last_fetch = time.monotonic()
         key = await pool.select_key()
         assert key == "keyB"
 
@@ -53,6 +74,7 @@ class TestKeyPoolSelectKeyExclude:
     async def test_select_key_skips_excluded_when_all_credits_zero(self):
         pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
         pool._credits = {"key1": 0, "key2": 0}
+        pool._last_fetch = time.monotonic()
         key = await pool.select_key(exclude={"key1"})
         assert key == "key2"
 
@@ -60,6 +82,7 @@ class TestKeyPoolSelectKeyExclude:
     async def test_select_key_returns_any_when_all_excluded_and_zero(self):
         pool = KeyPool(keys=["key1", "key2"], base_url="https://api.example.com")
         pool._credits = {"key1": 0, "key2": 0}
+        pool._last_fetch = time.monotonic()
         key = await pool.select_key(exclude={"key1", "key2"})
         assert key == "key1"
 

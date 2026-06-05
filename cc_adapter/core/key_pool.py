@@ -23,7 +23,13 @@ class KeyPool:
 
     async def select_key(self, exclude: set[str] | None = None) -> str | None:
         if self._is_stale():
-            self._trigger_refresh()
+            if self._last_fetch is None:
+                try:
+                    await self.refresh()
+                except Exception:
+                    logger.warning("initial_credits_fetch_failed", exc_info=True)
+            else:
+                self._trigger_refresh()
         skip = exclude or set()
         for key in self._keys:
             if key in skip:

@@ -96,6 +96,27 @@ def error_response_500():
     return FakeResponse()
 
 
+@pytest.fixture
+def error_response_400_insufficient_credits():
+    class FakeResponse:
+        is_error = True
+        status_code = 400
+
+        async def aread(self):
+            return b'{"success":false,"error":{"message":"You have insufficient credits to make this request."}}'
+
+        async def aiter_lines(self):
+            yield ""
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+    return FakeResponse()
+
+
 class TestMultiKeyClient:
     @pytest.mark.asyncio
     async def test_single_key_behavior_unchanged(self, sse_stream):
@@ -281,3 +302,69 @@ class TestMultiKeyClient:
             [e async for e in client.generate({"params": {"model": "test", "messages": []}})]
 
         assert used_keys == ["keyA"]
+
+    @pytest.mark.asyncio
+    async def test_400_insufficient_credits_retries_next_key(self, error_response_400_insufficient_credits, sse_stream):
+        """400 with 'insufficient credits' triggers retry with second key."""
+        client = CommandCodeClient(
+            base_url="https://api.example.com",
+            api_key="key1",
+            api_keys=["key1", "key2"],
+        )
+        client.key_pool._credits = {"key1": 100, "key2": 200}
+        client.key_pool._last_fetch = time.monotonic()
+
+        call_count = 0
+
+        def mock_stream(method, url, json, headers, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return error_response_400_insufficient_credits
+            return sse_stream()
+
+        with patch.object(httpx.AsyncClient, "stream", side_effect=mock_stream):
+            events = [e async for e in client.generate({"params": {"model": "test", "messages": []}})]
+
+        assert call_count == 2
+        assert len(events) == 1
+
+    @pytest.mark.asyncio
+    async def test_400_without_credits_phrase_not_retried(self):
+        class Fake400:
+            is_error = True
+            status_code = 400
+
+            async def aread(self):
+                return b'{"error":"bad_request_other_reason"}'
+
+            async def aiter_lines(self):
+                yield ""
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                pass
+
+        client = CommandCodeClient(
+            base_url="https://api.example.com",
+            api_key="key1",
+            api_keys=["key1", "key2"],
+        )
+        client.key_pool._credits = {"key1": 100, "key2": 200}
+        client.key_pool._last_fetch = time.monotonic()
+
+        call_count = 0
+
+        def mock_stream(method, url, json, headers, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return Fake400()
+
+        with patch.object(httpx.AsyncClient, "stream", side_effect=mock_stream):
+            with pytest.raises(AdapterError):
+                async for _ in client.generate({"params": {"model": "test", "messages": []}}):
+                    pass
+
+        assert call_count == 1
