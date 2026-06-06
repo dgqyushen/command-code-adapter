@@ -10,6 +10,8 @@
 
 支持**流式（SSE）**和**非流式**响应，附带 Web 管理面板。
 
+> **兼容性说明：** `OpenAI Chat Completions`（`/v1/chat/completions`）适配效果最好，功能覆盖最完整，推荐优先使用。`Anthropic Messages` 和 `OpenAI Responses` 为基础适配，部分高级特性未覆盖。
+
 ### 快速开始
 
 ```bash
@@ -207,6 +209,12 @@ cc_adapter/
 ---
 
 ## English
+
+Exposes the [Command Code API](https://api.commandcode.ai) as OpenAI Chat Completions, Anthropic Messages, and OpenAI Responses compatible adapters.
+
+Supports **streaming (SSE)** and **non-streaming** responses, with a built-in web admin panel.
+
+> **Compatibility note:** `OpenAI Chat Completions` (`/v1/chat/completions`) has the best adaptation with full feature coverage and is recommended for primary use. `Anthropic Messages` and `OpenAI Responses` provide basic adaptation with limited advanced feature support.
 
 ### Quick Start
 
