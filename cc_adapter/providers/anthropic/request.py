@@ -3,7 +3,7 @@ from __future__ import annotations
 import structlog
 from typing import Any
 
-from cc_adapter.providers.anthropic.models import AnthropicRequest
+from cc_adapter.providers.anthropic.models import AnthropicRequest, extract_system_text, normalize_system_messages
 from cc_adapter.command_code.headers import make_cc_headers
 from cc_adapter.providers.shared.model_mapping import resolve_model_id, clamp_reasoning_effort
 from cc_adapter.providers.shared.tool_mapping import make_tool_call_block, make_tool_result_block, normalize_schema
@@ -27,17 +27,9 @@ def _budget_to_effort(budget: int | None) -> str | None:
     return "xhigh"
 
 
-def _extract_system_text(system: str | list[dict[str, Any]] | None) -> str | None:
-    if system is None:
-        return None
-    if isinstance(system, str):
-        return system
-    texts = [b.get("text", "") for b in system if isinstance(b, dict) and b.get("type") == "text"]
-    return " ".join(texts) if texts else None
-
-
 class AnthropicTranslator:
     def translate(self, req: AnthropicRequest) -> tuple[dict[str, Any], dict[str, Any]]:
+        req = normalize_system_messages(req)
         self._warn_unsupported(req)
         cc_body = self._build_body(req)
         cc_headers = make_cc_headers()
@@ -57,7 +49,7 @@ class AnthropicTranslator:
             "stream": True,
         }
 
-        system_text = _extract_system_text(req.system)
+        system_text = extract_system_text(req.system)
         if system_text:
             params["system"] = system_text
 

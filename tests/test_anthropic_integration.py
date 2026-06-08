@@ -66,6 +66,38 @@ def _setup(
     return cfg, mock_client
 
 
+@pytest.mark.asyncio
+async def test_claude_code_message_level_system_role_is_normalized(client):
+    captured_body: dict[str, Any] = {}
+    _, mock_client = _setup()
+
+    async def _generate(body, extra_headers=None):
+        captured_body.update(body)
+        yield {"type": "text-delta", "text": "OK"}
+        yield {"type": "finish", "finishReason": "end_turn", "totalUsage": {"inputTokens": 10, "outputTokens": 1}}
+
+    mock_client.generate = _generate
+    payload = {
+        "model": "deepseek/deepseek-v4-pro",
+        "max_tokens": 1024,
+        "messages": [
+            {"role": "user", "content": "hello"},
+            {"role": "system", "content": "Claude Code internal system instructions"},
+            {"role": "user", "content": "test"},
+        ],
+        "stream": False,
+    }
+
+    async with client as c:
+        resp = await c.post("/v1/messages", json=payload)
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["content"][0]["text"] == "OK"
+    assert captured_body["params"]["system"] == "Claude Code internal system instructions"
+    assert [m["role"] for m in captured_body["params"]["messages"]] == ["user", "user"]
+    assert all(m["role"] != "system" for m in captured_body["params"]["messages"])
+
+
 # ====== Non-streaming tool call tests ======
 
 

@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from cc_adapter.providers.anthropic.models import AnthropicMessage, AnthropicRequest
+from cc_adapter.providers.anthropic.models import AnthropicMessage, AnthropicRequest, normalize_system_messages
 from cc_adapter.providers.anthropic.request import AnthropicTranslator
 from cc_adapter.providers.anthropic.response import (
     collect_and_translate_anthropic_nonstream,
@@ -45,6 +45,107 @@ def test_system_prompt_list(translator):
     )
     body, _ = translator.translate(req)
     assert body["params"]["system"] == "You are helpful."
+
+
+def test_normalize_without_message_level_system_keeps_request_unchanged(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            AnthropicMessage(role="user", content="hi"),
+            AnthropicMessage(role="assistant", content="hello"),
+        ],
+    )
+    normalized = normalize_system_messages(req)
+    body, _ = translator.translate(normalized)
+
+    assert normalized is req
+    assert [m.role for m in normalized.messages] == ["user", "assistant"]
+    assert "system" not in body["params"]
+    assert [m["role"] for m in body["params"]["messages"]] == ["user", "assistant"]
+
+
+def test_message_level_system_moves_to_top_level_system(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            AnthropicMessage(role="system", content="You are helpful."),
+            AnthropicMessage(role="user", content="hi"),
+        ],
+    )
+    body, _ = translator.translate(req)
+
+    assert body["params"]["system"] == "You are helpful."
+    assert [m["role"] for m in body["params"]["messages"]] == ["user"]
+
+
+def test_top_level_and_message_level_system_are_merged_in_order(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        system="Top level instructions.",
+        messages=[
+            AnthropicMessage(role="user", content="hi"),
+            AnthropicMessage(role="system", content="Message instructions."),
+        ],
+    )
+    body, _ = translator.translate(req)
+
+    assert body["params"]["system"] == "Top level instructions.\n\nMessage instructions."
+    assert [m["role"] for m in body["params"]["messages"]] == ["user"]
+
+
+def test_multiple_message_level_systems_are_merged_in_original_order(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            AnthropicMessage(role="system", content="first"),
+            AnthropicMessage(role="user", content="hi"),
+            AnthropicMessage(role="system", content="second"),
+            AnthropicMessage(role="assistant", content="hello"),
+            AnthropicMessage(role="system", content="third"),
+        ],
+    )
+    body, _ = translator.translate(req)
+
+    assert body["params"]["system"] == "first\n\nsecond\n\nthird"
+    assert [m["role"] for m in body["params"]["messages"]] == ["user", "assistant"]
+
+
+def test_message_level_system_content_blocks_extract_text(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            AnthropicMessage(
+                role="system",
+                content=[
+                    {"type": "text", "text": "block one"},
+                    {"type": "image", "source": {"type": "base64", "data": "abc"}},
+                    {"type": "text", "text": "block two"},
+                ],
+            ),
+            AnthropicMessage(role="user", content="hi"),
+        ],
+    )
+    body, _ = translator.translate(req)
+
+    assert body["params"]["system"] == "block one block two"
+    assert [m["role"] for m in body["params"]["messages"]] == ["user"]
+
+
+def test_message_level_system_in_middle_preserves_non_system_order(translator):
+    req = AnthropicRequest(
+        model="claude-sonnet-4-6",
+        messages=[
+            AnthropicMessage(role="user", content="hello"),
+            AnthropicMessage(role="system", content="internal instructions"),
+            AnthropicMessage(role="assistant", content="hello back"),
+            AnthropicMessage(role="user", content="test"),
+        ],
+    )
+    body, _ = translator.translate(req)
+
+    assert body["params"]["system"] == "internal instructions"
+    assert [m["role"] for m in body["params"]["messages"]] == ["user", "assistant", "user"]
+    assert [m["content"][0]["text"] for m in body["params"]["messages"]] == ["hello", "hello back", "test"]
 
 
 def test_tool_definition(translator):
