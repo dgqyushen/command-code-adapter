@@ -57,6 +57,7 @@ const i18n = {
     usageModels: "模型",
     usageLoading: "加载中...",
     usageNoData: "暂无使用数据",
+    pastYear: "过去一年",
   },
   en: {
     title: "CC Adapter Admin",
@@ -115,6 +116,7 @@ const i18n = {
     usageModels: "Models",
     usageLoading: "Loading...",
     usageNoData: "No usage data",
+    pastYear: "Past Year",
   },
 };
 
@@ -267,7 +269,204 @@ async function renderDashboard() {
     </div>`;
   loadDashboard();
   document.getElementById("verify-key-btn").onclick = verifyKey;
+  renderHeatmap();
   renderUsageSection();
+}
+
+function renderHeatmap() {
+  const container = document.getElementById("tab-dashboard");
+  const section = document.createElement("div");
+  section.className = "token-heatmap";
+  section.id = "heatmap-section";
+  section.innerHTML = `
+    <h3>Token Heatmap (${t("pastYear")})</h3>
+    <div id="heatmap-content"><div class="heatmap-empty">Loading...</div></div>`;
+  container.appendChild(section);
+  loadHeatmap();
+}
+
+async function loadHeatmap() {
+  const content = document.getElementById("heatmap-content");
+  if (!content) return;
+  try {
+    const resp = await api("GET", "/admin/api/token-usage?days=365");
+    const data = await resp.json();
+    if (!data || Object.keys(data).length === 0) {
+      content.innerHTML = '<div class="heatmap-empty">No token usage data yet</div>';
+      return;
+    }
+    content.innerHTML = "";
+    content.appendChild(buildHeatmap(data));
+  } catch {
+    content.innerHTML = '<div class="heatmap-empty">Failed to load</div>';
+  }
+}
+
+function buildHeatmap(data) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endDate = new Date(today);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 365 + 1);
+
+  // Normalize to start on Sunday
+  const dayOfWeek = startDate.getDay();
+  if (dayOfWeek !== 0) {
+    startDate.setDate(startDate.getDate() - dayOfWeek);
+  }
+
+  const values = [];
+  let maxTokens = 1;
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().slice(0, 10);
+    const entry = data[key];
+    const tokens = entry ? entry.tokens : 0;
+    values.push({date: key, tokens: tokens, requests: entry ? entry.requests : 0});
+    if (tokens > maxTokens) maxTokens = tokens;
+  }
+
+  // Compute quantile thresholds for 5 levels
+  const nonZero = values.filter(v => v.tokens > 0).map(v => v.tokens).sort((a, b) => a - b);
+  let thresholds = [0, 0, 0, 0, 0];
+  if (nonZero.length > 0) {
+    const step = Math.max(1, Math.floor(nonZero.length / 5));
+    for (let i = 0; i < 5; i++) {
+      const idx = Math.min(nonZero.length - 1, i * step);
+      thresholds[i] = nonZero[idx];
+    }
+  }
+
+  function level(tokens) {
+    if (tokens <= thresholds[0]) return 0;
+    for (let i = 4; i >= 0; i--) {
+      if (tokens >= thresholds[i]) return i;
+    }
+    return 1;
+  }
+
+  // Build columns: one per week
+  const columns = [];
+  for (let i = 0; i < values.length; i += 7) {
+    columns.push(values.slice(i, i + 7));
+  }
+
+  // Month labels
+  const months = [];
+  let lastMonth = -1;
+  for (let ci = 0; ci < columns.length; ci++) {
+    const d = new Date(columns[ci][0].date + "T00:00:00");
+    const m = d.getMonth();
+    if (m !== lastMonth) {
+      months.push({index: ci, label: d.toLocaleDateString("en", {month: "short"})});
+      lastMonth = m;
+    }
+  }
+
+  const weekDays = ["", "Mon", "", "Wed", "", "Fri", ""];
+
+  const wrapper = document.createElement("div");
+
+  // Month labels row
+  const monthRow = document.createElement("div");
+  monthRow.className = "heatmap-month-labels";
+  const totalWidth = columns.length * 17; // 14px cell + 3px gap
+  monthRow.style.width = totalWidth + "px";
+  months.forEach((m, i) => {
+    const label = document.createElement("span");
+    label.className = "heatmap-month-label";
+    const start = m.index * 17;
+    const next = i + 1 < months.length ? months[i + 1].index * 17 : totalWidth;
+    label.style.position = "absolute";
+    label.style.left = (start + 24) + "px";
+    label.textContent = m.label;
+    monthRow.appendChild(label);
+  });
+  monthRow.style.position = "relative";
+  monthRow.style.height = "16px";
+  wrapper.appendChild(monthRow);
+
+  // Body: week labels + grid
+  const body = document.createElement("div");
+  body.className = "heatmap-body";
+
+  // Week day labels
+  const weekLabels = document.createElement("div");
+  weekLabels.className = "heatmap-week-labels";
+  weekDays.forEach(day => {
+    const wl = document.createElement("span");
+    wl.className = "heatmap-week-label";
+    wl.textContent = day;
+    weekLabels.appendChild(wl);
+  });
+  body.appendChild(weekLabels);
+
+  // Grid
+  const grid = document.createElement("div");
+  grid.className = "heatmap-grid";
+
+  let tid = "heatmap-tooltip";
+  let tooltipEl = document.getElementById(tid);
+  if (!tooltipEl) {
+    tooltipEl = document.createElement("div");
+    tooltipEl.id = tid;
+    tooltipEl.className = "heatmap-tooltip";
+    tooltipEl.style.display = "none";
+    document.body.appendChild(tooltipEl);
+  }
+
+  function showTooltip(e, date, tokens, requests) {
+    tooltipEl.innerHTML = `<div class="date">${date}</div><div class="tokens">${tokens.toLocaleString()} tokens</div><div>${requests} requests</div>`;
+    tooltipEl.style.display = "block";
+    const rect = e.target.getBoundingClientRect();
+    tooltipEl.style.position = "fixed";
+    tooltipEl.style.left = Math.min(rect.left + 12, window.innerWidth - 160) + "px";
+    tooltipEl.style.top = (rect.top - 44) + "px";
+  }
+
+  function onDocClick() { tooltipEl.style.display = "none"; }
+  document.removeEventListener("click", onDocClick, true);
+  document.addEventListener("click", onDocClick, true);
+
+  columns.forEach((col, ci) => {
+    const colDiv = document.createElement("div");
+    colDiv.className = "heatmap-column";
+    col.forEach(cell => {
+      const cel = document.createElement("div");
+      cel.className = "heatmap-cell l" + level(cell.tokens);
+      cel.onmouseenter = (e) => showTooltip(e, cell.date, cell.tokens, cell.requests);
+      cel.onmouseleave = () => { tooltipEl.style.display = "none"; };
+      cel.onclick = () => {
+        document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+        const usageTab = document.querySelector('.nav-item[data-tab="usage"]');
+        if (usageTab) usageTab.click();
+        const startInput = document.getElementById("usage-start");
+        const endInput = document.getElementById("usage-end");
+        if (startInput && endInput) {
+          startInput.value = cell.date;
+          endInput.value = cell.date;
+          if (typeof loadUsageAnalyticsData === "function") loadUsageAnalyticsData();
+        }
+      };
+      colDiv.appendChild(cel);
+    });
+    grid.appendChild(colDiv);
+  });
+  body.appendChild(grid);
+  wrapper.appendChild(body);
+
+  // Legend
+  const legend = document.createElement("div");
+  legend.className = "heatmap-legend";
+  legend.innerHTML = '<span class="heatmap-legend-label">Less</span>';
+  for (let l = 0; l <= 4; l++) {
+    const legendCell = document.createElement("span");
+    legendCell.className = "heatmap-legend-cell l" + l;
+    legend.appendChild(legendCell);
+  }
+  legend.innerHTML += '<span class="heatmap-legend-label">More</span>';
+  wrapper.appendChild(legend);
+
+  return wrapper;
 }
 
 async function loadDashboard() {

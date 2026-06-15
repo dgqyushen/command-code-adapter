@@ -15,6 +15,7 @@ from cc_adapter.core.runtime import (
     get_model_fetcher,
     force_refresh_models,
 )
+from cc_adapter.core.token_recorder import query_daily_tokens
 from cc_adapter.core.config import DEFAULT_MODEL
 from cc_adapter.core.constants import VERSION
 from cc_adapter.command_code.body import make_cc_body, make_config
@@ -211,6 +212,11 @@ async def admin_usage_query(_=Depends(verify_auth)):
         return []
     results = await query_all_tokens(cfg.cc_base_url, cfg.cc_api_key)
     return results
+
+
+@router.get("/token-usage")
+async def token_usage(days: int = 365, _=Depends(verify_auth)):
+    return query_daily_tokens(days)
 
 
 class DailyUsageRequest(BaseModel):

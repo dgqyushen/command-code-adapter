@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import structlog
 from typing import AsyncGenerator
@@ -59,6 +60,12 @@ async def collect_and_translate_anthropic_nonstream(
                 input_tokens=raw_usage.get("inputTokens", 0),
                 output_tokens=raw_usage.get("outputTokens", 0),
             )
+            try:
+                from cc_adapter.core.token_recorder import record_daily_tokens
+
+                asyncio.ensure_future(record_daily_tokens(usage.input_tokens or 0, usage.output_tokens or 0))
+            except Exception:
+                pass
 
         elif event_type == "error":
             err = event.get("error", {})
@@ -250,12 +257,20 @@ async def translate_anthropic_stream(
 
             stop_reason = _map_stop_reason(event.get("finishReason"))
             raw_usage = event.get("totalUsage") or {}
+            input_t = raw_usage.get("inputTokens", 0)
+            output_t = raw_usage.get("outputTokens", 0)
+            try:
+                from cc_adapter.core.token_recorder import record_daily_tokens
+
+                asyncio.ensure_future(record_daily_tokens(input_t, output_t))
+            except Exception:
+                pass
             yield _anthropic_sse(
                 "message_delta",
                 {
                     "type": "message_delta",
                     "delta": {"stop_reason": stop_reason, "stop_sequence": None},
-                    "usage": {"output_tokens": raw_usage.get("outputTokens", 0)},
+                    "usage": {"output_tokens": output_t},
                 },
             )
             yield _anthropic_sse("message_stop", {"type": "message_stop"})
