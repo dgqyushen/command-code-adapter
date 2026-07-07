@@ -22,7 +22,7 @@ def test_basic_text_message(translator):
         messages=[AnthropicMessage(role="user", content="hello")],
     )
     body, headers = translator.translate(req)
-    assert body["params"]["model"] == "claude-sonnet-4-6"
+    assert body["params"]["model"] == "anthropic:claude-sonnet-4-6"
     assert body["params"]["messages"][0]["content"] == [{"type": "text", "text": "hello"}]
     assert "Authorization" not in headers
 
@@ -292,8 +292,7 @@ def test_unsupported_params_logged_as_warning(translator, caplog):
     assert any("stop_sequences" in r.message for r in caplog.records)
 
 
-def test_image_content_block_skipped(translator, caplog):
-    caplog.set_level(logging.WARNING)
+def test_image_content_block_translated(translator):
     req = AnthropicRequest(
         model="claude-sonnet-4-6",
         messages=[
@@ -314,8 +313,11 @@ def test_image_content_block_skipped(translator, caplog):
         ],
     )
     body, _ = translator.translate(req)
-    assert "Image" in caplog.text
-    assert body["params"]["messages"][0]["content"] == [{"type": "text", "text": "what is this?"}]
+    content = body["params"]["messages"][0]["content"]
+    assert content == [
+        {"type": "image", "image": "data:image/jpeg;base64,abc"},
+        {"type": "text", "text": "what is this?"},
+    ]
 
 
 @pytest.mark.asyncio

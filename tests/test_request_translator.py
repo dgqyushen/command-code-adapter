@@ -40,7 +40,7 @@ def test_basic_message_translation(translator):
         messages=[ChatMessage(role="user", content="hello")],
     )
     body, headers = translator.translate(req)
-    assert body["params"]["model"] == "claude-sonnet-4-6"
+    assert body["params"]["model"] == "anthropic:claude-sonnet-4-6"
     assert body["params"]["messages"][0]["content"] == [{"type": "text", "text": "hello"}]
     assert body["params"]["stream"] is False
     assert "env" not in body["config"]
@@ -218,7 +218,7 @@ def test_normalize_default_provider_model_unchanged(translator):
         messages=[ChatMessage(role="user", content="hi")],
     )
     body, _ = translator.translate(req)
-    assert body["params"]["model"] == "claude-sonnet-4-6"
+    assert body["params"]["model"] == "anthropic:claude-sonnet-4-6"
 
 
 def test_reasoning_effort_high_passthrough(translator):

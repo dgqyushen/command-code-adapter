@@ -46,6 +46,28 @@ class RequestTranslator:
         return [{"type": "text", "text": content or ""}]
 
     @staticmethod
+    def _translate_image_url(part: dict) -> dict[str, Any]:
+        image_url = part.get("image_url", {})
+        url = image_url.get("url", "") if isinstance(image_url, dict) else str(image_url)
+        return {"type": "image", "image": url}
+
+    @staticmethod
+    def _build_content_parts(content: str | list[dict] | None) -> list[dict[str, Any]]:
+        if content is None:
+            return []
+        if isinstance(content, str):
+            return [{"type": "text", "text": content}]
+        parts = []
+        for part in content:
+            if not isinstance(part, dict):
+                parts.append({"type": "text", "text": str(part)})
+            elif part.get("type") == "image_url":
+                parts.append(RequestTranslator._translate_image_url(part))
+            elif part.get("type") == "text":
+                parts.append({"type": "text", "text": part.get("text", "")})
+        return parts
+
+    @staticmethod
     def _parse_tool_arguments(raw: str) -> dict[str, Any]:
         from cc_adapter.core.utils import parse_tool_arguments
 
@@ -64,7 +86,7 @@ class RequestTranslator:
         tool_names_by_id: dict[str, str] = {}
         for msg in messages:
             if msg.role == "system":
-                system_prompt = msg.content
+                system_prompt = msg.content if isinstance(msg.content, str) else None
             elif msg.role == "tool":
                 tool_call_id = msg.tool_call_id or ""
                 d: dict[str, Any] = {
@@ -79,15 +101,13 @@ class RequestTranslator:
                 }
                 others.append(d)
             else:
-                content = []
-                if msg.content:
-                    content.extend(self._wrap_content(msg.content))
+                content = list(self._build_content_parts(msg.content))
                 if msg.tool_calls:
                     for tc in msg.tool_calls:
                         tool_names_by_id[tc.id] = tc.function.name
                         content.append(self._tool_call_block(tc))
                 if not content:
-                    content = self._wrap_content(msg.content)
+                    content = self._wrap_content(None)
                 d = {"role": msg.role, "content": content}
                 if msg.name:
                     d["name"] = msg.name

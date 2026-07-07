@@ -26,6 +26,8 @@ MODEL_PREFIXES = (
     "zai-org/",
     "Qwen/",
     "baseten:",
+    "anthropic:",
+    "openai:",
     "xiaomi/",
 )
 

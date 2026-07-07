@@ -152,7 +152,10 @@ class AnthropicTranslator:
                     )
                 )
             elif block_type == "image":
-                logger.warning("Image content block not supported, skipping")
+                source = block.get("source", {})
+                media_type = source.get("media_type", "image/jpeg")
+                data = source.get("data", "")
+                result.append({"type": "image", "image": f"data:{media_type};base64,{data}"})
             elif block_type == "thinking":
                 pass
         return result
