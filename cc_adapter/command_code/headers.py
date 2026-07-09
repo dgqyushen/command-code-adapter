@@ -16,7 +16,6 @@ def make_cc_headers(api_key: str | None = None) -> dict[str, str]:
         "Content-Type": "application/json",
         "x-command-code-version": get_version_checker().get_version(),
         "x-cli-environment": "production",
-        "x-project-slug": "adapter",
         "x-co-flag": "false",
         "x-taste-learning": "false",
         "traceparent": _make_traceparent(),

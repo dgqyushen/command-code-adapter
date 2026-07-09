@@ -188,15 +188,17 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
 
     try:
         translator = get_anthropic_translator()
-        cc_body, cc_headers = translator.translate(req)
+        cc_body, _ = translator.translate(req)
         cc_body["params"]["stream"] = True
 
         current_client = _get_client()
 
+        client_headers = {k.lower(): v for k, v in request.headers.items()}
+
         if req.stream:
             return StreamingResponse(
                 stream_with_retry(
-                    lambda: current_client.generate(cc_body, cc_headers),
+                    lambda: current_client.generate(cc_body, client_headers),
                     lambda stream: translate_anthropic_stream(stream, req.model),
                     logger,
                     "anthropic.stream",
@@ -206,7 +208,7 @@ async def anthropic_chat(req: AnthropicRequest, request: Request):
                 headers=STREAMING_HEADERS,
             )
         return await retry_on_empty(
-            lambda: current_client.generate(cc_body, cc_headers),
+            lambda: current_client.generate(cc_body, client_headers),
             lambda stream: collect_and_translate_anthropic_nonstream(stream, req.model),
             logger,
             "anthropic.nonstream",
