@@ -41,6 +41,11 @@ _INSUFFICIENT_CREDITS_PHRASES = (
     "insufficient_credits",
 )
 
+_ZDR_ERROR_PHRASES = (
+    "zero-data-retention",
+    "disable cmd_zdr",
+)
+
 
 def _is_retryable_error(status_code: int, body_text: str) -> bool:
     if status_code in (402, 429):
@@ -49,6 +54,13 @@ def _is_retryable_error(status_code: int, body_text: str) -> bool:
         lowered = body_text.lower()
         return any(phrase in lowered for phrase in _INSUFFICIENT_CREDITS_PHRASES)
     return False
+
+
+def _is_zdr_error(status_code: int, body_text: str) -> bool:
+    if status_code != 400:
+        return False
+    lowered = body_text.lower()
+    return any(phrase in lowered for phrase in _ZDR_ERROR_PHRASES)
 
 
 def _make_http2_safe(http2: bool) -> bool:
@@ -114,6 +126,7 @@ class CommandCodeClient:
     ) -> AsyncGenerator[dict[str, Any], None]:
         tried_keys: set[str] = set()
         last_error: Exception | None = None
+        zdr_downgraded: bool = False
 
         while True:
             if self.key_pool is not None:
@@ -132,6 +145,8 @@ class CommandCodeClient:
             tried_keys.add(key)
 
             headers = make_cc_headers(key)
+            if zdr_downgraded:
+                headers.pop("x-cmd-zdr", None)
             headers["x-session-id"] = self._session_id
             headers.update(extra_headers or {})
 
@@ -148,6 +163,12 @@ class CommandCodeClient:
 
                         if _is_retryable_error(response.status_code, text):
                             last_error = mapped
+                            continue
+
+                        if _is_zdr_error(response.status_code, text) and not zdr_downgraded:
+                            zdr_downgraded = True
+                            tried_keys.discard(key)
+                            logger.info("zdr.downgrade", key_last4=key[-4:])
                             continue
 
                         raise mapped
