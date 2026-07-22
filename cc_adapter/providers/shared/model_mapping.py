@@ -11,6 +11,7 @@ MODEL_PROVIDER_MAP: dict[str, str] = {
     "deepseek-v4-flash": "deepseek/deepseek-v4-flash",
     "kimi-k2-6": "moonshotai/Kimi-K2.6",
     "kimi-k2-5": "moonshotai/Kimi-K2.5",
+    "glm-5-2": "zai-org/GLM-5.2",
     "glm-5-1": "zai-org/GLM-5.1",
     "glm-5": "zai-org/GLM-5",
     "minimax-m2-7": "MiniMaxAI/MiniMax-M2.7",
@@ -56,6 +57,7 @@ MODEL_REASONING_EFFORTS_MAP: dict[str, list[str]] = {
     "Qwen/Qwen3.6-Max-Preview": ["low", "medium", "high"],
     "Qwen/Qwen3.6-Plus": ["low", "medium", "high"],
     "stepfun/Step-3.5-Flash": ["low", "medium", "high"],
+    "zai-org/GLM-5.2": ["high", "max"],
 }  # ponytail: duplicated entries with old and new prefix formats, merge when old format is fully deprecated
 
 NOT_SUPPORTED_PARAMS = {

@@ -2,6 +2,7 @@ import pytest
 from cc_adapter.providers.shared.model_mapping import (
     MODEL_REASONING_EFFORTS_MAP,
     clamp_reasoning_effort,
+    resolve_model_id,
 )
 
 
@@ -36,6 +37,12 @@ class TestClampReasoningEffort:
 
     def test_model_with_alias_resolved_via_MODEL_PROVIDER_MAP(self):
         assert clamp_reasoning_effort("deepseek-v4-flash", "low") == "high"
+
+    def test_glm_5_2_alias_resolves_to_canonical_model(self):
+        assert resolve_model_id("glm-5-2") == "zai-org/GLM-5.2"
+
+    def test_glm_5_2_supports_max_reasoning_effort(self):
+        assert clamp_reasoning_effort("glm-5-2", "max") == "max"
 
     def test_unknown_effort_falls_back_to_max(self):
         assert clamp_reasoning_effort("deepseek/deepseek-v4-flash", "extreme") == "max"
