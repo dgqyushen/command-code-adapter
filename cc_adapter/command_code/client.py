@@ -7,8 +7,8 @@ from typing import AsyncGenerator, Any
 import httpx
 
 from cc_adapter.core.errors import map_upstream_error, AuthenticationError, TimeoutError_, UpstreamError
-from cc_adapter.core.utils import generate_id
 from cc_adapter.command_code.headers import make_cc_headers
+from cc_adapter.providers.shared.session_extractor import get_session_extractor
 
 logger = structlog.get_logger(__name__)
 
@@ -95,8 +95,6 @@ class CommandCodeClient:
         self._max_keepalive_connections = max_keepalive_connections
         self._http2 = _make_http2_safe(http2)
 
-        self._session_id = generate_id("sess_", 16)
-
         if api_keys and len(api_keys) > 1:
             from cc_adapter.core.key_pool import KeyPool
 
@@ -127,6 +125,10 @@ class CommandCodeClient:
         tried_keys: set[str] = set()
         last_error: Exception | None = None
         zdr_downgraded: bool = False
+        extractor = get_session_extractor()
+        # extra_headers may contain client-authored values (X-Session-ID etc.)
+        # for stable-flag extraction but must not leak to the CC upstream.
+        stable_flag = extractor.extract_stable_flag(body, extra_headers)
 
         while True:
             if self.key_pool is not None:
@@ -144,11 +146,13 @@ class CommandCodeClient:
 
             tried_keys.add(key)
 
+            session_id, project_slug = extractor.derive(stable_flag, key)
+
             headers = make_cc_headers(key)
             if zdr_downgraded:
                 headers.pop("x-cmd-zdr", None)
-            headers["x-session-id"] = self._session_id
-            headers.update(extra_headers or {})
+            headers["x-session-id"] = session_id
+            headers["x-project-slug"] = project_slug
 
             url = f"{self.base_url}/alpha/generate"
 

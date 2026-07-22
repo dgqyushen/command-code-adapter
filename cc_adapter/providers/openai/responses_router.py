@@ -34,15 +34,17 @@ async def create_response(req: ResponseCreateRequest, request: Request):
 
     try:
         translator = get_responses_translator()
-        cc_body, cc_headers = translator.translate(req)
+        cc_body, _ = translator.translate(req)
         cc_body["params"]["stream"] = True
 
         current_client = get_or_create_client()
 
+        client_headers = {k.lower(): v for k, v in request.headers.items()}
+
         if req.stream:
             return StreamingResponse(
                 stream_with_retry(
-                    lambda: current_client.generate(cc_body, cc_headers),
+                    lambda: current_client.generate(cc_body, client_headers),
                     lambda stream: translate_responses_stream(stream, req.model),
                     logger,
                     "responses.stream",
@@ -53,7 +55,7 @@ async def create_response(req: ResponseCreateRequest, request: Request):
             )
         else:
             result = await retry_on_empty(
-                lambda: current_client.generate(cc_body, cc_headers),
+                lambda: current_client.generate(cc_body, client_headers),
                 lambda stream: collect_and_translate_responses_nonstream(stream, req.model),
                 logger,
                 "responses.nonstream",

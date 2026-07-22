@@ -31,19 +31,22 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
     )
 
     translator = get_request_translator()
-    cc_body, cc_headers = translator.translate(req)
+    cc_body, _ = translator.translate(req)
     cc_body["params"]["stream"] = True
     tools_available = bool(req.tools) and req.tool_choice != "none"
 
     start_time = time.time()
 
+    # Forward client-authored session headers so the upstream session id can
+    # be derived from them when present (e.g. X-Session-ID).
+    client_headers = {k.lower(): v for k, v in request.headers.items()}
     current_client = get_or_create_client()
 
     if req.stream:
         detector = _BufferDetector() if tools_available else None
         return StreamingResponse(
             stream_with_retry(
-                lambda: current_client.generate(cc_body, cc_headers),
+                lambda: current_client.generate(cc_body, client_headers),
                 lambda stream: translate_stream(stream, req.model, start_time, req.reasoning_effort, tools_available),
                 logger,
                 "openai.stream",
@@ -54,7 +57,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request):
         )
     else:
         return await retry_on_empty(
-            lambda: current_client.generate(cc_body, cc_headers),
+            lambda: current_client.generate(cc_body, client_headers),
             lambda stream: collect_and_translate_nonstream(
                 stream, req.model, start_time, req.reasoning_effort, tools_available
             ),

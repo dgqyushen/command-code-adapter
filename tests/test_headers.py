@@ -9,9 +9,9 @@ class TestMakeCcHeaders:
         assert headers["Content-Type"] == "application/json"
         assert headers["x-command-code-version"] == "0.25.2"
         assert headers["x-cli-environment"] == "production"
-        assert headers["x-project-slug"] == "adapter"
         assert headers["x-co-flag"] == "false"
         assert headers["x-taste-learning"] == "false"
+        assert "x-project-slug" not in headers
         assert "Authorization" not in headers
 
     def test_with_api_key(self):
