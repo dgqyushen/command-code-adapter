@@ -7,7 +7,13 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from cc_adapter.providers.anthropic.models import AnthropicRequest, AnthropicResponse, AnthropicUsage
+from cc_adapter.providers.anthropic.models import (
+    AnthropicRequest,
+    AnthropicResponse,
+    AnthropicUsage,
+    extract_system_text,
+    normalize_system_messages,
+)
 from cc_adapter.providers.anthropic.response import (
     translate_anthropic_stream,
     collect_and_translate_anthropic_nonstream,
@@ -34,15 +40,6 @@ def _anthropic_sse_error(message: str) -> str:
     return format_sse("error", {"type": "error", "error": {"type": "api_error", "message": message}})
 
 
-def _extract_system_text(system):
-    if system is None:
-        return None
-    if isinstance(system, str):
-        return system
-    texts = [b.get("text", "") for b in system if isinstance(b, dict) and b.get("type") == "text"]
-    return " ".join(texts) if texts else None
-
-
 def _build_deepseek_body(req: AnthropicRequest) -> dict:
     config = get_config()
     model_override = config.web_search_model.strip() if config and config.web_search_model else ""
@@ -54,7 +51,7 @@ def _build_deepseek_body(req: AnthropicRequest) -> dict:
         "messages": [m.model_dump(exclude_none=True) for m in req.messages],
     }
 
-    system_text = _extract_system_text(req.system)
+    system_text = extract_system_text(req.system)
     if system_text:
         body["system"] = system_text
 
@@ -157,6 +154,7 @@ async def _deepseek_nonstream(req: AnthropicRequest) -> AnthropicResponse:
 @router.post("/v1/messages")
 async def anthropic_chat(req: AnthropicRequest, request: Request):
     structlog.contextvars.bind_contextvars(protocol="anthropic")
+    req = normalize_system_messages(req)
 
     logger.info(
         "anthropic.request",
